@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Just Call Moe VIP Admin</title>
+    <meta name="description" content="Admin dashboard for the Just Call Moe VIP member portal beta.">
+    <link rel="stylesheet" href="admin.css">
+    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script defer src="admin.js"></script>
+  </head>
+  <body>
+    <div class="admin-app">
+      <aside class="sidebar" aria-label="Admin sections">
+        <img
+          class="sidebar-logo"
+          src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
+          alt="Just Call Moe"
+        >
+        <nav class="admin-nav">
+          <button class="is-active" type="button" data-section-target="overview">
+            <i data-lucide="layout-dashboard" aria-hidden="true"></i>
+            Overview
+          </button>
+          <button type="button" data-section-target="members">
+            <i data-lucide="users" aria-hidden="true"></i>
+            Members
+          </button>
+          <button type="button" data-section-target="import">
+            <i data-lucide="table-properties" aria-hidden="true"></i>
+            Import
+          </button>
+          <button type="button" data-section-target="events">
+            <i data-lucide="calendar-days" aria-hidden="true"></i>
+            Events
+          </button>
+          <button type="button" data-section-target="perks">
+            <i data-lucide="badge-percent" aria-hidden="true"></i>
+            Perks
+          </button>
+          <button type="button" data-section-target="concierge">
+            <i data-lucide="messages-square" aria-hidden="true"></i>
+            Concierge
+          </button>
+        </nav>
+        <a class="member-link" href="index.html">
+          <i data-lucide="smartphone" aria-hidden="true"></i>
+          Member App
+        </a>
+      </aside>
+
+      <main class="admin-main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">VIP Program Admin</p>
+            <h1 id="section-title">Overview</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" type="button" data-export>
+              <i data-lucide="download" aria-hidden="true"></i>
+              Export
+            </button>
+            <button class="primary-button" type="button" data-open-dialog="member-dialog">
+              <i data-lucide="user-plus" aria-hidden="true"></i>
+              Add VIP
+            </button>
+          </div>
+        </header>
+
+        <section class="admin-section is-active" id="section-overview" aria-labelledby="section-title">
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Active VIPs</span>
+              <strong data-metric-members>248</strong>
+              <small>12 added this month</small>
+            </article>
+            <article class="metric">
+              <span>Open Requests</span>
+              <strong data-metric-requests>4</strong>
+              <small>2 awaiting owner</small>
+            </article>
+            <article class="metric">
+              <span>Event Links</span>
+              <strong data-metric-events>2</strong>
+              <small>Eventbrite powered</small>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Today</p>
+                  <h2>Priority Queue</h2>
+                </div>
+                <button class="ghost-button compact" type="button" data-section-shortcut="concierge">Review</button>
+              </div>
+              <div class="timeline">
+                <article>
+                  <span class="dot red"></span>
+                  <div>
+                    <strong>New concierge request</strong>
+                    <p>Avery Mitchell asked about Eventbrite access.</p>
+                  </div>
+                </article>
+                <article>
+                  <span class="dot blue"></span>
+                  <div>
+                    <strong>Event link needs review</strong>
+                    <p>Tampa VIP Party currently points to a placeholder Eventbrite URL.</p>
+                  </div>
+                </article>
+                <article>
+                  <span class="dot green"></span>
+                  <div>
+                    <strong>Member profile updated</strong>
+                    <p>Jordan Rivera confirmed VIP contact preferences.</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Preview</p>
+                  <h2>Latest VIP Card</h2>
+                </div>
+                <button class="ghost-button compact" type="button" data-section-shortcut="members">Open</button>
+              </div>
+              <div class="card-preview">
+                <img src="assets/just-call-moe-vip-card.png" alt="Just Call Moe VIP card">
+                <span data-preview-name>Avery Mitchell</span>
+              </div>
+              <div class="preview-meta">
+                <strong data-preview-member>Avery Mitchell</strong>
+                <span>JCM-VIP-0248</span>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="admin-section" id="section-import" aria-label="Import VIP members">
+          <div class="editor-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Spreadsheet Import</p>
+                  <h2>Import VIPs</h2>
+                </div>
+              </div>
+              <form class="stack-form" data-import-form>
+                <label>
+                  Google Sheet URL
+                  <input name="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+                </label>
+                <label>
+                  Or paste CSV rows
+                  <textarea name="csvRows" rows="6">Full Name,Email,Phone,City
+Taylor Brooks,taylor@example.com,407-555-0101,Orlando
+Morgan Lee,morgan@example.com,813-555-0102,Tampa
+Casey Nguyen,casey@example.com,561-555-0103,West Palm Beach</textarea>
+                </label>
+                <div class="two-col">
+                  <label>
+                    Match on
+                    <select name="matchOn">
+                      <option>Email or phone</option>
+                      <option>Email only</option>
+                      <option>Phone only</option>
+                    </select>
+                  </label>
+                  <label>
+                    Default status
+                    <select name="status">
+                      <option>Active</option>
+                      <option>Unclaimed</option>
+                      <option>Paused</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button class="ghost-button" type="submit">
+                    <i data-lucide="eye" aria-hidden="true"></i>
+                    Preview Import
+                  </button>
+                  <button class="primary-button" type="button" data-run-import disabled>
+                    <i data-lucide="database" aria-hidden="true"></i>
+                    Import Preview
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Preview</p>
+                  <h2>Records Ready</h2>
+                </div>
+                <span class="status-pill paused" data-import-count>0 records</span>
+              </div>
+              <div class="import-preview" data-import-preview>
+                <p>Preview rows from your Google Sheet or pasted CSV before importing.</p>
+              </div>
+              <div class="check-list">
+                <label><input type="checkbox" checked> Normalize phone numbers</label>
+                <label><input type="checkbox" checked> Skip duplicate emails</label>
+                <label><input type="checkbox" checked> Mark accounts as unclaimed until verified</label>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="admin-section" id="section-members" aria-label="VIP members">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Members</p>
+                <h2>VIP Member List</h2>
+              </div>
+              <label class="search-field">
+                <i data-lucide="search" aria-hidden="true"></i>
+                <input type="search" placeholder="Search members" data-member-search>
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Member ID</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody data-member-table>
+                  <tr data-member-id="mem_avery_mitchell" data-member-name="Avery Mitchell">
+                    <td><strong>Avery Mitchell</strong><small>Orlando</small></td>
+                    <td>avery@example.com</td>
+                    <td>JCM-VIP-0248</td>
+                    <td><span class="status-pill active">Active</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button type="button" data-preview-member-row="Avery Mitchell">Preview</button>
+                        <button class="danger-button" type="button" data-delete-member>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr data-member-id="mem_jordan_rivera" data-member-name="Jordan Rivera">
+                    <td><strong>Jordan Rivera</strong><small>Tampa</small></td>
+                    <td>jordan@example.com</td>
+                    <td>JCM-VIP-0249</td>
+                    <td><span class="status-pill active">Active</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button type="button" data-preview-member-row="Jordan Rivera">Preview</button>
+                        <button class="danger-button" type="button" data-delete-member>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr data-member-id="mem_sam_carter" data-member-name="Sam Carter">
+                    <td><strong>Sam Carter</strong><small>West Palm Beach</small></td>
+                    <td>sam@example.com</td>
+                    <td>JCM-VIP-0250</td>
+                    <td><span class="status-pill paused">Paused</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button type="button" data-preview-member-row="Sam Carter">Preview</button>
+                        <button class="danger-button" type="button" data-delete-member>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-section" id="section-events" aria-label="Eventbrite event links">
+          <div class="editor-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Eventbrite</p>
+                  <h2>Event Links</h2>
+                </div>
+                <button class="primary-button compact" type="button" data-add-event>
+                  <i data-lucide="plus" aria-hidden="true"></i>
+                  Add Event
+                </button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Event</th>
+                      <th>Date</th>
+                      <th>Location</th>
+                      <th>Visibility</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody data-event-table>
+                    <tr data-event-id="evt_restaurant_night" data-event-name="VIP Restaurant Night">
+                      <td><strong>VIP Restaurant Night</strong><small data-event-url>eventbrite.com/e/second-annual...</small></td>
+                      <td>Jun 18</td>
+                      <td>Orlando</td>
+                      <td><span class="status-pill active">Visible</span></td>
+                      <td><button class="danger-button" type="button" data-delete-event>Delete</button></td>
+                    </tr>
+                    <tr data-event-id="evt_party_tampa" data-event-name="Just Call Moe Party">
+                      <td><strong>Just Call Moe Party</strong><small data-event-url>eventbrite.com/e/second-annual...</small></td>
+                      <td>Jul 09</td>
+                      <td>Tampa</td>
+                      <td><span class="status-pill active">Visible</span></td>
+                      <td><button class="danger-button" type="button" data-delete-event>Delete</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">New Event</p>
+                  <h2>Eventbrite Details</h2>
+                </div>
+              </div>
+              <form class="stack-form" data-event-form>
+                <label>
+                  Event name
+                  <input name="eventName" value="VIP Restaurant Night">
+                </label>
+                <label>
+                  Eventbrite URL
+                  <input name="eventUrl" value="https://www.eventbrite.com/e/second-annual-just-call-moe-celebrity-bowl-o-rama-tickets-1237735242429">
+                </label>
+                <div class="two-col">
+                  <label>
+                    Date
+                    <input name="eventDate" value="Jun 18">
+                  </label>
+                  <label>
+                    Location
+                    <input name="eventLocation" value="Orlando">
+                  </label>
+                </div>
+                <label>
+                  Member copy
+                  <textarea name="eventCopy" rows="3">Local restaurant invite for VIP members and guests.</textarea>
+                </label>
+                <button class="primary-button" type="submit">
+                  <i data-lucide="save" aria-hidden="true"></i>
+                  Publish Event Link
+                </button>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <section class="admin-section" id="section-perks" aria-label="VIP perks">
+          <div class="editor-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Perks</p>
+                  <h2>Published Perks</h2>
+                </div>
+              </div>
+              <div class="perk-list" data-perk-list>
+                <article>
+                  <i data-lucide="badge-percent" aria-hidden="true"></i>
+                  <div>
+                    <strong>Shop discount</strong>
+                    <p>Code MOEVIP · visible</p>
+                  </div>
+                  <button type="button" data-toggle-row>Visible</button>
+                </article>
+                <article>
+                  <i data-lucide="users" aria-hidden="true"></i>
+                  <div>
+                    <strong>Private group</strong>
+                    <p>Facebook community · members only</p>
+                  </div>
+                  <button type="button" data-toggle-row>Visible</button>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="admin-section" id="section-concierge" aria-label="Concierge requests">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Concierge</p>
+                <h2>Request Inbox</h2>
+              </div>
+              <label class="search-field">
+                <i data-lucide="filter" aria-hidden="true"></i>
+                <select data-request-filter>
+                  <option>All requests</option>
+                  <option>Open</option>
+                  <option>In review</option>
+                  <option>Closed</option>
+                </select>
+              </label>
+            </div>
+            <div class="request-board" data-request-board>
+              <article>
+                <span class="status-pill open">Open</span>
+                <div>
+                  <strong>Avery Mitchell</strong>
+                  <p>Can you send details about the next VIP Eventbrite listing?</p>
+                </div>
+                <select data-request-status>
+                  <option>Open</option>
+                  <option>In review</option>
+                  <option>Closed</option>
+                </select>
+              </article>
+              <article>
+                <span class="status-pill review">In review</span>
+                <div>
+                  <strong>Jordan Rivera</strong>
+                  <p>Asked about VIP contact preferences.</p>
+                </div>
+                <select data-request-status>
+                  <option>In review</option>
+                  <option>Open</option>
+                  <option>Closed</option>
+                </select>
+              </article>
+              <article>
+                <span class="status-pill closed">Closed</span>
+                <div>
+                  <strong>Sam Carter</strong>
+                  <p>VIP shop code resent by email.</p>
+                </div>
+                <select data-request-status>
+                  <option>Closed</option>
+                  <option>Open</option>
+                  <option>In review</option>
+                </select>
+              </article>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="admin-dialog" id="member-dialog" aria-labelledby="member-dialog-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">New VIP</p>
+          <h2 id="member-dialog-title">Add Member</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <form class="stack-form" data-member-form>
+        <label>
+          Name
+          <input name="name" placeholder="Client name" required>
+        </label>
+        <label>
+          Email
+          <input name="email" type="email" placeholder="client@example.com" required>
+        </label>
+        <label>
+          Location
+          <input name="location" placeholder="Orlando">
+        </label>
+        <button class="primary-button" type="submit">
+          <i data-lucide="user-plus" aria-hidden="true"></i>
+          Add VIP Member
+        </button>
+      </form>
+    </dialog>
+
+    <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Just Call Moe VIP Portal Beta</title>
+    <meta
+      name="description"
+      content="Local beta for the Just Call Moe VIP member portal."
+    >
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main class="workspace" aria-label="Just Call Moe VIP portal beta">
+      <section class="phone-shell" aria-label="Mobile app preview">
+        <div class="phone-frame">
+          <div class="status-bar" aria-hidden="true">
+            <span>9:41</span>
+            <span>5G 100%</span>
+          </div>
+
+          <div class="app-screen">
+            <header class="app-header">
+              <img
+                class="brand-logo"
+                src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
+                alt="Just Call Moe"
+              >
+              <button class="icon-button" type="button" data-sheet-open="updates-sheet" aria-label="View alerts">
+                <i data-lucide="bell" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">!</span>
+                <span class="alert-dot" aria-hidden="true"></span>
+              </button>
+            </header>
+
+            <section class="claim-screen" data-auth-screen aria-label="Claim your VIP card">
+              <div class="claim-panel">
+                <img
+                  class="claim-logo"
+                  src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
+                  alt="Just Call Moe"
+                >
+                <p class="eyebrow">VIP Access</p>
+                <h1>Claim Your VIP Card</h1>
+                <p>
+                  Enter the email or phone number connected to your VIP membership. If it matches a record, we will send a verification code.
+                </p>
+
+                <form class="claim-form" data-claim-form>
+                  <label for="claim-identity">Email or phone</label>
+                  <input id="claim-identity" name="identity" type="text" placeholder="avery@example.com" autocomplete="email" required>
+
+                  <label for="claim-last-name">Last name</label>
+                  <input id="claim-last-name" name="lastName" type="text" placeholder="Mitchell" autocomplete="family-name" required>
+
+                  <button class="primary-action full-width" type="submit">
+                    <i data-lucide="key-round" aria-hidden="true"></i>
+                    <span class="fallback-icon" aria-hidden="true">K</span>
+                    Send Code
+                  </button>
+                  <p class="fine-print" data-claim-message>
+                    Static demo: use avery@example.com, jordan@example.com, or 407-555-0188. Code: 246810.
+                  </p>
+                </form>
+
+                <form class="claim-form code-form" data-code-form hidden>
+                  <label for="claim-code">Verification code</label>
+                  <input id="claim-code" name="code" type="text" inputmode="numeric" maxlength="6" placeholder="246810" required>
+                  <button class="primary-action full-width" type="submit">
+                    <i data-lucide="badge-check" aria-hidden="true"></i>
+                    <span class="fallback-icon" aria-hidden="true">V</span>
+                    Open VIP Portal
+                  </button>
+                  <button class="secondary-action full-width" type="button" data-change-identity>
+                    Use Different Email or Phone
+                  </button>
+                  <p class="fine-print" data-code-message></p>
+                </form>
+
+                <a class="claim-help" href="mailto:vip@justcallmoe.com">Need help claiming your card?</a>
+              </div>
+            </section>
+
+            <div class="screen-title">
+              <p class="eyebrow">VIP Member Portal</p>
+              <h1 id="view-title">Your VIP Card</h1>
+            </div>
+
+            <section class="view is-active" id="view-card" aria-labelledby="view-title">
+              <figure class="vip-graphic-card">
+                <div class="card-art">
+                  <img
+                    src="assets/just-call-moe-vip-card.png"
+                    alt="Just Call Moe VIP Card"
+                  >
+                  <span class="etched-name" aria-hidden="true">Avery Mitchell</span>
+                </div>
+                <figcaption>
+                  <div>
+                  <p class="pass-label">VIP Member</p>
+                  <h2>Active VIP</h2>
+                </div>
+                  <p class="member-id" data-member-id>JCM-VIP-0248</p>
+                </figcaption>
+              </figure>
+
+              <div class="wallet-row" aria-label="Wallet actions">
+                <button class="primary-action" type="button" data-toast="Apple Wallet pass queued for member invite.">
+                  <i data-lucide="wallet-cards" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">W</span>
+                  Apple Wallet
+                </button>
+                <button class="secondary-action" type="button" data-toast="Google Wallet pass queued for member invite.">
+                  <i data-lucide="smartphone" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">G</span>
+                  Google Wallet
+                </button>
+              </div>
+
+              <div class="quick-actions">
+                <a class="action-tile" href="tel:+18336639467" aria-label="Call 833-MOE-WINS">
+                  <i data-lucide="phone-call" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">P</span>
+                  <span>Call VIP Line</span>
+                </a>
+                <a class="action-tile" href="mailto:vip@justcallmoe.com">
+                  <i data-lucide="mail" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">M</span>
+                  <span>Email Moe</span>
+                </a>
+                <button class="action-tile" type="button" data-view-shortcut="perks" data-title="VIP Perks">
+                  <i data-lucide="sparkles" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">*</span>
+                  <span>View Perks</span>
+                </button>
+              </div>
+
+              <div class="vip-snapshot" aria-label="VIP snapshot">
+                <article class="snapshot-row">
+                  <i data-lucide="calendar-check" aria-hidden="true"></i>
+                  <div>
+                    <p class="eyebrow">Next Invite</p>
+                    <h2 data-next-event-title>VIP Restaurant Night</h2>
+                    <p data-next-event-meta>Jun 18, Orlando · Eventbrite registration</p>
+                  </div>
+                  <button type="button" data-view-shortcut="events" data-title="Events">View</button>
+                </article>
+                <article class="snapshot-row">
+                  <i data-lucide="message-circle" aria-hidden="true"></i>
+                  <div>
+                    <p class="eyebrow">Concierge</p>
+                    <h2>VIP desk is available</h2>
+                    <p>Typical response: same business day</p>
+                  </div>
+                  <button type="button" data-view-shortcut="concierge" data-title="Concierge">Ask</button>
+                </article>
+              </div>
+            </section>
+
+            <section class="view" id="view-perks" aria-label="VIP perks">
+              <article class="perk-card accent-red">
+                <div class="perk-icon">
+                  <i data-lucide="badge-percent" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">%</span>
+                </div>
+                <div>
+                  <h2>Shop discount</h2>
+                  <p>Use code <strong>MOEVIP</strong> for merchandise at Shop.JustCallMoe.com.</p>
+                  <small>Available now</small>
+                </div>
+                <button type="button" data-toast="VIP shop code copied: MOEVIP">Copy</button>
+              </article>
+
+              <article class="perk-card accent-blue">
+                <div class="perk-icon">
+                  <i data-lucide="megaphone" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">A</span>
+                </div>
+                <div>
+                  <h2>Free merch alerts</h2>
+                  <p>Be first to hear when new VIP merchandise drops.</p>
+                  <small>SMS and email eligible</small>
+                </div>
+                <button type="button" data-toggle-alert>On</button>
+              </article>
+
+              <article class="perk-card accent-green">
+                <div class="perk-icon">
+                  <i data-lucide="users" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">F</span>
+                </div>
+                <div>
+                  <h2>Private group</h2>
+                  <p>Access the members-only Just Call Moe VIP Facebook community.</p>
+                  <small>Members-only access</small>
+                </div>
+                <a
+                  href="https://www.facebook.com/share/g/1B5JVZj46a/"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Join
+                </a>
+              </article>
+            </section>
+
+            <section class="view" id="view-events" aria-label="VIP events">
+              <div class="calendar-strip" aria-label="Upcoming dates" data-date-strip>
+                <button class="date-pill is-selected" type="button">Jun<br><strong>18</strong></button>
+                <button class="date-pill" type="button">Jul<br><strong>09</strong></button>
+                <button class="date-pill" type="button">Aug<br><strong>22</strong></button>
+              </div>
+
+              <div class="event-list" data-events-list>
+                <article class="event-card">
+                  <div class="event-copy">
+                    <p class="eyebrow">Orlando</p>
+                    <h2>VIP Restaurant Night</h2>
+                    <p>Local restaurant invite for VIP members and guests.</p>
+                    <div class="event-meta">
+                      <span>Jun 18</span>
+                      <span>6:30 PM</span>
+                      <span>Eventbrite</span>
+                    </div>
+                    <div class="event-actions">
+                      <a
+                        class="eventbrite-link"
+                        href="https://www.eventbrite.com/e/second-annual-just-call-moe-celebrity-bowl-o-rama-tickets-1237735242429"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        Open Eventbrite
+                      </a>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="event-card">
+                  <div class="event-copy">
+                    <p class="eyebrow">Tampa</p>
+                    <h2>Just Call Moe Party</h2>
+                    <p>Members-only celebration with VIP member welcome table.</p>
+                    <div class="event-meta">
+                      <span>Jul 09</span>
+                      <span>7:00 PM</span>
+                      <span>Eventbrite</span>
+                    </div>
+                    <div class="event-actions">
+                      <a
+                        class="eventbrite-link"
+                        href="https://www.eventbrite.com/e/second-annual-just-call-moe-celebrity-bowl-o-rama-tickets-1237735242429"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        Open Eventbrite
+                      </a>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="view" id="view-concierge" aria-label="VIP concierge">
+              <div class="concierge-panel">
+                <div class="concierge-header">
+                  <i data-lucide="headphones" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">C</span>
+                  <div>
+                    <p class="eyebrow">Members-only</p>
+                    <h2>Concierge Service</h2>
+                  </div>
+                </div>
+                <p>
+                  VIP members get dedicated help for legal questions, concerns, and program support.
+                </p>
+                <div class="contact-stack">
+                  <a href="tel:+18336639467" aria-label="Call 833-MOE-WINS">
+                    <i data-lucide="phone" aria-hidden="true"></i>
+                    <span class="fallback-icon" aria-hidden="true">P</span>
+                    833-MOE-WINS
+                  </a>
+                  <a href="mailto:vip@justcallmoe.com">
+                    <i data-lucide="mail" aria-hidden="true"></i>
+                    <span class="fallback-icon" aria-hidden="true">M</span>
+                    vip@justcallmoe.com
+                  </a>
+                </div>
+              </div>
+
+              <form class="request-form">
+                <label for="request-type">Request type</label>
+                <select id="request-type" name="request-type">
+                  <option>Legal question</option>
+                  <option>Event help</option>
+                </select>
+
+                <label for="message">Message</label>
+                <textarea id="message" name="message" rows="4" placeholder="How can the VIP team help?"></textarea>
+
+                <button class="primary-action" type="submit">
+                  <i data-lucide="send" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">S</span>
+                  Send Request
+                </button>
+                <p class="fine-print">
+                  Emergency, medical, and urgent legal matters should use direct phone support or emergency services.
+                </p>
+              </form>
+
+              <div class="request-tracker" aria-live="polite">
+                <h2>Recent Requests</h2>
+                <article class="request-item">
+                  <span class="status-chip">In review</span>
+                  <div>
+                    <strong>Event help</strong>
+                    <p>Question about the next VIP Eventbrite listing.</p>
+                  </div>
+                </article>
+                <article class="request-item">
+                  <span class="status-chip done">Closed</span>
+                  <div>
+                    <strong>Legal question</strong>
+                    <p>VIP desk followed up by email.</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="view" id="view-profile" aria-label="Member profile">
+              <div class="member-summary">
+                <div class="avatar" aria-hidden="true">AM</div>
+                <div>
+                  <p class="eyebrow">VIP Member</p>
+                  <h2>Avery Mitchell</h2>
+                  <p data-member-since>Member since 2024</p>
+                  <p data-member-contact>avery@example.com</p>
+                </div>
+              </div>
+
+              <div class="settings-list">
+                <label class="setting-row input-row">
+                  <span>
+                    <strong>Card name</strong>
+                    <small>Shown on the VIP card</small>
+                  </span>
+                  <input type="text" value="Avery Mitchell" data-name-input aria-label="Card name">
+                </label>
+                <label class="setting-row">
+                  <span>
+                    <strong>SMS alerts</strong>
+                    <small>Events and free merchandise</small>
+                  </span>
+                  <input type="checkbox" checked>
+                </label>
+                <label class="setting-row">
+                  <span>
+                    <strong>Email updates</strong>
+                    <small>Perks, events, and VIP news</small>
+                  </span>
+                  <input type="checkbox" checked>
+                </label>
+                <label class="setting-row">
+                  <span>
+                    <strong>Wallet auto-updates</strong>
+                    <small>Refresh card status and event pass</small>
+                  </span>
+                  <input type="checkbox" checked>
+                </label>
+              </div>
+
+              <button class="secondary-action full-width" type="button" data-save-profile>
+                <i data-lucide="settings" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">E</span>
+                Save Profile
+              </button>
+            </section>
+
+            <nav class="bottom-nav" aria-label="Primary">
+              <button class="nav-item is-active" type="button" data-view-target="card" data-title="Your VIP Card">
+                <i data-lucide="credit-card" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">C</span>
+                <span>Card</span>
+              </button>
+              <button class="nav-item" type="button" data-view-target="perks" data-title="VIP Perks">
+                <i data-lucide="sparkles" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">*</span>
+                <span>Perks</span>
+              </button>
+              <button class="nav-item" type="button" data-view-target="events" data-title="Events">
+                <i data-lucide="calendar-days" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">D</span>
+                <span>Events</span>
+              </button>
+              <button class="nav-item" type="button" data-view-target="concierge" data-title="Concierge">
+                <i data-lucide="messages-square" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">Q</span>
+                <span>Help</span>
+              </button>
+              <button class="nav-item" type="button" data-view-target="profile" data-title="Profile">
+                <i data-lucide="circle-user-round" aria-hidden="true"></i>
+                <span class="fallback-icon" aria-hidden="true">U</span>
+                <span>Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+      </section>
+
+      <aside class="build-panel" aria-label="Implementation summary">
+        <img
+          class="build-logo"
+          src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
+          alt="Just Call Moe"
+        >
+        <p class="eyebrow">Beta Direction</p>
+        <h2>VIP client portal with wallet-ready membership card.</h2>
+        <p>
+          The first release should be a mobile web portal with digital card, concierge access,
+          perks, events, concierge support, and admin controls. Native apps can follow once member behavior is proven.
+        </p>
+        <div class="metric-grid">
+          <div>
+            <strong>5</strong>
+            <span>Core VIP benefits</span>
+          </div>
+          <div>
+            <strong>2</strong>
+            <span>Wallet platforms</span>
+          </div>
+          <div>
+            <strong>1</strong>
+            <span>Admin console</span>
+          </div>
+        </div>
+        <a class="brief-link" href="PRODUCT_BRIEF.md">Open Product Brief</a>
+      </aside>
+    </main>
+
+    <section class="sheet" id="updates-sheet" aria-label="VIP updates" hidden>
+      <div class="sheet-panel">
+        <div class="sheet-header">
+          <div>
+            <p class="eyebrow">VIP Updates</p>
+            <h2>Latest from Just Call Moe</h2>
+          </div>
+          <button class="icon-button" type="button" data-sheet-close aria-label="Close updates">
+            <i data-lucide="x" aria-hidden="true"></i>
+            <span class="fallback-icon" aria-hidden="true">X</span>
+          </button>
+        </div>
+        <article class="update-item">
+          <i data-lucide="ticket" aria-hidden="true"></i>
+          <div>
+            <strong>New event invite</strong>
+            <p>VIP Restaurant Night is available through Eventbrite.</p>
+          </div>
+        </article>
+        <article class="update-item">
+          <i data-lucide="shirt" aria-hidden="true"></i>
+          <div>
+            <strong>Merch alert</strong>
+            <p>Free merchandise drop notifications are turned on.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>
