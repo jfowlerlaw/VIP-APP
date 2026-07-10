@@ -54,6 +54,8 @@ To import the existing VIP Google Sheet, export the sheet as CSV and upload it f
 
 Optional helpful columns are `id`, `name`, `card_name`, `phone`, `member_id`, and `joined`. If the sheet does not already have IDs, Supabase will generate them. If `name` and `card_name` are blank, Supabase will build them from `first_name` and `last_name`.
 
+The admin importer also accepts common name-header variations such as `First`, `Last`, `First Name`, and `Last Name`.
+
 Example:
 
 ```csv

@@ -96,22 +96,55 @@ function parseCsvRows(raw) {
 
   if (rows.length < 2) return [];
 
-  const headers = rows[0].map((header) => header.trim().toLowerCase());
+  const headers = rows[0].map(normalizeCsvHeader);
   return rows.slice(1).map((values) => {
     const record = Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
-    const firstName = record.first_name || record["first name"] || record.firstname || "";
-    const lastName = record.last_name || record["last name"] || record.lastname || "";
+    const firstName = csvValue(record, [
+      "first_name",
+      "firstname",
+      "first",
+      "given_name",
+      "client_first_name",
+      "contact_first_name",
+    ]);
+    const lastName = csvValue(record, [
+      "last_name",
+      "lastname",
+      "last",
+      "surname",
+      "family_name",
+      "client_last_name",
+      "contact_last_name",
+    ]);
+    const fullName = csvValue(record, ["full_name", "fullname", "name", "client_name", "customer_name"]);
     const name = [firstName, lastName].filter(Boolean).join(" ").trim();
     return {
       firstName,
       lastName,
-      name: name || record["full name"] || record.name || record.full_name || "VIP Member",
-      email: record.email || "",
-      phone: record.phone || "",
-      city: record.city || record.location || "Orlando",
-      status: record.status || "",
+      name: name || fullName || "VIP Member",
+      email: csvValue(record, ["email", "email_address", "emailaddress", "e_mail"]),
+      phone: csvValue(record, ["phone", "phone_number", "phonenumber", "mobile", "mobile_phone"]),
+      city: csvValue(record, ["city", "location", "market"]) || "Orlando",
+      status: csvValue(record, ["status", "vip_status"]),
     };
   });
+}
+
+function normalizeCsvHeader(header) {
+  return String(header || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\uFEFF/, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function csvValue(record, aliases) {
+  for (const alias of aliases) {
+    const value = record[normalizeCsvHeader(alias)];
+    if (value) return value;
+  }
+  return "";
 }
 
 function parseCsvTable(raw) {

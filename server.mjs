@@ -664,33 +664,48 @@ function buildSummary(db) {
 }
 
 function normalizeMemberRecord(record, index = 0) {
-  const firstName = String(
-    record.firstName || record.first_name || record["First Name"] || record["first name"] || ""
-  ).trim();
-  const lastName = String(
-    record.lastName || record.last_name || record["Last Name"] || record["last name"] || ""
-  ).trim();
+  const firstName = String(recordValue(record, [
+    "firstName",
+    "first_name",
+    "first name",
+    "firstname",
+    "first",
+    "given_name",
+    "client_first_name",
+    "contact_first_name",
+  ])).trim();
+  const lastName = String(recordValue(record, [
+    "lastName",
+    "last_name",
+    "last name",
+    "lastname",
+    "last",
+    "surname",
+    "family_name",
+    "client_last_name",
+    "contact_last_name",
+  ])).trim();
   const name = displayNameFromParts({
     firstName,
     lastName,
-    name: record.name || record.fullName || record.full_name || record["Full Name"] || record["full name"],
+    name: recordValue(record, ["name", "fullName", "full_name", "full name", "fullname", "client_name"]),
   });
-  const email = String(record.email || record.Email || "").trim().toLowerCase();
-  const phone = digitsOnly(String(record.phone || record.Phone || ""));
-  const joined = String(record.joined || new Date().getFullYear());
+  const email = String(recordValue(record, ["email", "email_address", "emailaddress", "e_mail"])).trim().toLowerCase();
+  const phone = digitsOnly(String(recordValue(record, ["phone", "phone_number", "phonenumber", "mobile", "mobile_phone"])));
+  const joined = String(recordValue(record, ["joined", "join_year", "year_joined"]) || new Date().getFullYear());
 
   return {
     id: `mem_${Date.now()}_${index}_${randomBytes(3).toString("hex")}`,
     firstName: firstName || firstNameFromName(name),
     lastName: lastName || lastNameFromName(name),
     name,
-    cardName: String(record.cardName || name).trim(),
+    cardName: String(recordValue(record, ["cardName", "card_name", "card name"]) || name).trim(),
     email,
     phone,
-    city: String(record.city || record.location || record.City || "Orlando").trim(),
-    memberId: record.memberId || nextMemberId(index),
+    city: String(recordValue(record, ["city", "location", "market"]) || "Orlando").trim(),
+    memberId: recordValue(record, ["memberId", "member_id", "member id", "vip_id", "vip id"]) || nextMemberId(index),
     joined,
-    status: String(record.status || "Unclaimed"),
+    status: String(recordValue(record, ["status", "vip_status", "vip status"]) || "Unclaimed"),
     claimedAt: null,
     preferences: {
       smsAlerts: true,
@@ -698,6 +713,28 @@ function normalizeMemberRecord(record, index = 0) {
       walletUpdates: true,
     },
   };
+}
+
+function recordValue(record, aliases) {
+  const normalizedEntries = Object.entries(record || {}).reduce((values, [key, value]) => {
+    values[normalizeRecordKey(key)] = value;
+    return values;
+  }, {});
+
+  for (const alias of aliases) {
+    const value = normalizedEntries[normalizeRecordKey(alias)];
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function normalizeRecordKey(key) {
+  return String(key || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function nextMemberId(index) {
