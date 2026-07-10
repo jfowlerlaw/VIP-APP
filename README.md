@@ -57,9 +57,9 @@ Optional helpful columns are `id`, `name`, `card_name`, `phone`, `member_id`, an
 Example:
 
 ```csv
-first_name,last_name,email,city,status
-Taylor,Brooks,taylor@example.com,Orlando,Unclaimed
-Morgan,Lee,morgan@example.com,Tampa,Unclaimed
+first_name,last_name,city,email,status
+Taylor,Brooks,Orlando,taylor@example.com,Unclaimed
+Morgan,Lee,Tampa,morgan@example.com,Unclaimed
 ```
 
 ## Next Production Step
