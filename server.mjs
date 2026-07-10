@@ -1,17 +1,16 @@
 import { createServer } from "node:http";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createDatabase } from "./database.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 loadLocalEnv();
 
 const port = Number(process.env.PORT || process.argv.at(2) || 8787);
 const host = process.env.HOST || "127.0.0.1";
-const dataDir = join(rootDir, "data");
-const dbPath = join(dataDir, "vip-db.json");
 const memberSessions = new Map();
 const adminSessions = new Map();
 const pendingClaims = new Map();
@@ -143,6 +142,8 @@ const seedDatabase = {
   ],
 };
 
+const vipDb = createDatabase({ rootDir, seedDatabase });
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -159,7 +160,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-await ensureDatabase();
+await vipDb.ensureDatabase();
 
 server.listen(port, host, () => {
   console.log(`VIP beta server running at http://127.0.0.1:${port}/index.html`);
@@ -174,14 +175,13 @@ async function handleApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
 
   if (route === "GET /api/health") {
-    sendJson(res, 200, { ok: true, mode: "vip-beta" });
+    sendJson(res, 200, { ok: true, mode: "vip-beta", database: vipDb.mode });
     return;
   }
 
   if (route === "GET /api/events") {
-    const db = await readDb();
     sendJson(res, 200, {
-      events: db.events.filter((event) => event.visible !== false),
+      events: await vipDb.listEvents({ visibleOnly: true }),
     });
     return;
   }
@@ -200,7 +200,7 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req);
     const identity = String(body.identity || "");
     const lastName = String(body.lastName || "");
-    const db = await readDb();
+    const db = await vipDb.readDb();
     const member = findMemberForClaim(db.members, identity, lastName);
 
     if (!member) {
@@ -238,21 +238,25 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    const db = await readDb();
-    const member = db.members.find((item) => item.id === claim.memberId);
+    const member = await vipDb.getMemberById(claim.memberId);
     if (!member) {
       sendJson(res, 404, { message: "Member record not found." });
       return;
     }
 
-    member.claimedAt = new Date().toISOString();
-    if (member.status === "Unclaimed") member.status = "Active";
-    await writeDb(db);
+    const updatedMember = await vipDb.updateMember(member.id, {
+      claimedAt: new Date().toISOString(),
+      status: member.status === "Unclaimed" ? "Active" : member.status,
+    });
+    if (!updatedMember) {
+      sendJson(res, 404, { message: "Member record not found." });
+      return;
+    }
     pendingClaims.delete(String(body.claimToken || ""));
 
     const sessionToken = token();
     memberSessions.set(sessionToken, {
-      memberId: member.id,
+      memberId: updatedMember.id,
       expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 30,
     });
 
@@ -260,7 +264,7 @@ async function handleApi(req, res, url) {
       maxAge: 60 * 60 * 24 * 30,
       httpOnly: true,
     });
-    sendJson(res, 200, { member: publicMember(member) });
+    sendJson(res, 200, { member: publicMember(updatedMember) });
     return;
   }
 
@@ -272,14 +276,18 @@ async function handleApi(req, res, url) {
     }
 
     const body = await readJsonBody(req);
-    const db = await readDb();
-    const storedMember = db.members.find((item) => item.id === member.id);
-    storedMember.cardName = String(body.cardName || storedMember.name).trim() || storedMember.name;
-    storedMember.preferences = {
-      ...storedMember.preferences,
-      ...body.preferences,
-    };
-    await writeDb(db);
+    const cardName = String(body.cardName || member.name).trim() || member.name;
+    const storedMember = await vipDb.updateMember(member.id, {
+      cardName,
+      preferences: {
+        ...member.preferences,
+        ...body.preferences,
+      },
+    });
+    if (!storedMember) {
+      sendJson(res, 404, { message: "Member record not found." });
+      return;
+    }
     sendJson(res, 200, { member: publicMember(storedMember) });
     return;
   }
@@ -292,7 +300,6 @@ async function handleApi(req, res, url) {
     }
 
     const body = await readJsonBody(req);
-    const db = await readDb();
     const request = {
       id: `req_${Date.now()}_${randomBytes(3).toString("hex")}`,
       memberId: member.id,
@@ -309,8 +316,7 @@ async function handleApi(req, res, url) {
     if (email.sentAt) request.emailSentAt = email.sentAt;
     if (email.error) request.emailError = email.error;
 
-    db.requests.unshift(request);
-    await writeDb(db);
+    await vipDb.createRequest(request);
     sendJson(res, 201, { request, email });
     return;
   }
@@ -356,23 +362,22 @@ async function handleAdminApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
 
   if (route === "GET /api/admin/summary") {
-    const db = await readDb();
+    const db = await vipDb.readDb();
     sendJson(res, 200, { summary: buildSummary(db) });
     return;
   }
 
   if (route === "GET /api/admin/members") {
-    const db = await readDb();
-    sendJson(res, 200, { members: db.members.map(publicMember) });
+    const members = await vipDb.listMembers();
+    sendJson(res, 200, { members: members.map(publicMember) });
     return;
   }
 
   if (route === "POST /api/admin/members") {
     const body = await readJsonBody(req);
-    const db = await readDb();
-    const member = normalizeMemberRecord(body, db.members.length);
-    db.members.unshift(member);
-    await writeDb(db);
+    const members = await vipDb.listMembers();
+    const member = await vipDb.createMember(normalizeMemberRecord(body, members.length));
+    const db = await vipDb.readDb();
     sendJson(res, 201, {
       member: publicMember(member),
       summary: buildSummary(db),
@@ -382,21 +387,17 @@ async function handleAdminApi(req, res, url) {
 
   if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/members/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/admin/members/", ""));
-    const db = await readDb();
-    const memberIndex = db.members.findIndex((member) => member.id === id);
-    if (memberIndex === -1) {
+    const result = await vipDb.deleteMember(id);
+    if (!result) {
       sendJson(res, 404, { message: "Member not found." });
       return;
     }
 
-    const [deletedMember] = db.members.splice(memberIndex, 1);
-    const originalRequestCount = db.requests.length;
-    db.requests = db.requests.filter((request) => request.memberId !== id);
     removeMemberSessions(id);
-    await writeDb(db);
+    const db = await vipDb.readDb();
     sendJson(res, 200, {
-      deletedMember: publicMember(deletedMember),
-      deletedRequests: originalRequestCount - db.requests.length,
+      deletedMember: publicMember(result.deletedMember),
+      deletedRequests: result.deletedRequests,
       members: db.members.map(publicMember),
       requests: db.requests,
       summary: buildSummary(db),
@@ -408,14 +409,16 @@ async function handleAdminApi(req, res, url) {
     const body = await readJsonBody(req);
     const records = Array.isArray(body.records) ? body.records : [];
     const status = String(body.status || "Unclaimed");
-    const db = await readDb();
+    const existingMembers = await vipDb.listMembers();
+    const knownMembers = [...existingMembers];
     const imported = [];
     const skipped = [];
+    const membersToCreate = [];
 
     records.forEach((record) => {
       const hasEmail = String(record.email || "").trim();
       const phone = digitsOnly(String(record.phone || ""));
-      const duplicate = db.members.find((member) => {
+      const duplicate = knownMembers.find((member) => {
         return (
           (hasEmail && member.email.toLowerCase() === hasEmail.toLowerCase()) ||
           (phone && member.phone === phone)
@@ -427,12 +430,14 @@ async function handleAdminApi(req, res, url) {
         return;
       }
 
-      const member = normalizeMemberRecord({ ...record, status }, db.members.length + imported.length);
-      db.members.unshift(member);
+      const member = normalizeMemberRecord({ ...record, status }, knownMembers.length + imported.length);
+      knownMembers.unshift(member);
+      membersToCreate.push(member);
       imported.push(publicMember(member));
     });
 
-    await writeDb(db);
+    await vipDb.createMembers(membersToCreate);
+    const db = await vipDb.readDb();
     sendJson(res, 200, {
       imported,
       skipped,
@@ -443,14 +448,12 @@ async function handleAdminApi(req, res, url) {
   }
 
   if (route === "GET /api/admin/events") {
-    const db = await readDb();
-    sendJson(res, 200, { events: db.events });
+    sendJson(res, 200, { events: await vipDb.listEvents() });
     return;
   }
 
   if (route === "POST /api/admin/events") {
     const body = await readJsonBody(req);
-    const db = await readDb();
     const event = {
       id: `evt_${Date.now()}_${randomBytes(3).toString("hex")}`,
       title: String(body.title || body.eventName || "VIP Event").trim(),
@@ -466,10 +469,10 @@ async function handleAdminApi(req, res, url) {
         "https://justcallmoe.com/wp-content/uploads/2024/04/Just-Call-Moe-VIP-Signup-4.webp",
       visible: true,
     };
-    db.events.unshift(event);
-    await writeDb(db);
+    const storedEvent = await vipDb.createEvent(event);
+    const db = await vipDb.readDb();
     sendJson(res, 201, {
-      event,
+      event: storedEvent,
       events: db.events,
       summary: buildSummary(db),
     });
@@ -478,15 +481,13 @@ async function handleAdminApi(req, res, url) {
 
   if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/events/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/admin/events/", ""));
-    const db = await readDb();
-    const eventIndex = db.events.findIndex((event) => event.id === id);
-    if (eventIndex === -1) {
+    const deletedEvent = await vipDb.deleteEvent(id);
+    if (!deletedEvent) {
       sendJson(res, 404, { message: "Event not found." });
       return;
     }
 
-    const [deletedEvent] = db.events.splice(eventIndex, 1);
-    await writeDb(db);
+    const db = await vipDb.readDb();
     sendJson(res, 200, {
       deletedEvent,
       events: db.events,
@@ -496,22 +497,19 @@ async function handleAdminApi(req, res, url) {
   }
 
   if (route === "GET /api/admin/requests") {
-    const db = await readDb();
-    sendJson(res, 200, { requests: db.requests });
+    sendJson(res, 200, { requests: await vipDb.listRequests() });
     return;
   }
 
   if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/requests/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/admin/requests/", ""));
     const body = await readJsonBody(req);
-    const db = await readDb();
-    const request = db.requests.find((item) => item.id === id);
+    const request = await vipDb.updateRequestStatus(id, String(body.status || "Open"));
     if (!request) {
       sendJson(res, 404, { message: "Request not found." });
       return;
     }
-    request.status = String(body.status || request.status);
-    await writeDb(db);
+    const db = await vipDb.readDb();
     sendJson(res, 200, { request, summary: buildSummary(db) });
     return;
   }
@@ -554,27 +552,6 @@ async function serveStatic(req, res, url) {
   }
 
   createReadStream(filePath).pipe(res);
-}
-
-async function ensureDatabase() {
-  await mkdir(dataDir, { recursive: true });
-  if (!existsSync(dbPath)) {
-    await writeDb(seedDatabase);
-  }
-}
-
-async function readDb() {
-  await ensureDatabase();
-  const raw = await readFile(dbPath, "utf8");
-  return {
-    ...seedDatabase,
-    ...JSON.parse(raw),
-  };
-}
-
-async function writeDb(db) {
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(dbPath, `${JSON.stringify(db, null, 2)}\n`);
 }
 
 async function sendConciergeEmail({ member, request }) {
@@ -753,8 +730,7 @@ async function requireMember(req) {
   const session = sessionToken ? memberSessions.get(sessionToken) : null;
   if (!session || session.expiresAt < Date.now()) return null;
 
-  const db = await readDb();
-  return db.members.find((member) => member.id === session.memberId) || null;
+  return vipDb.getMemberById(session.memberId);
 }
 
 function removeMemberSessions(memberId) {
