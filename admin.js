@@ -104,13 +104,24 @@ function parseCsvRows(raw) {
   return lines.slice(1).map((line) => {
     const values = line.split(",").map((value) => value.trim());
     const record = Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+    const firstName = record.first_name || record["first name"] || record.firstname || "";
+    const lastName = record.last_name || record["last name"] || record.lastname || "";
+    const name = [firstName, lastName].filter(Boolean).join(" ").trim();
     return {
-      name: record["full name"] || record.name || record.full_name || "VIP Member",
+      firstName,
+      lastName,
+      name: name || record["full name"] || record.name || record.full_name || "VIP Member",
       email: record.email || "",
       phone: record.phone || "",
       city: record.city || record.location || "Orlando",
+      status: record.status || "",
     };
   });
+}
+
+function displayMemberName(member) {
+  const joinedName = [member.firstName, member.lastName].filter(Boolean).join(" ").trim();
+  return joinedName || member.name || "VIP Member";
 }
 
 function escapeHtml(value) {
@@ -124,7 +135,8 @@ function escapeHtml(value) {
 
 function addMemberRow(member, status = "Active", placement = "prepend") {
   if (!memberTable) return;
-  const { name, email, city, memberId = nextMemberId() } = member;
+  const { email, city, memberId = nextMemberId() } = member;
+  const name = displayMemberName(member);
   const row = document.createElement("tr");
   row.dataset.memberId = member.id || "";
   row.dataset.memberName = name;
@@ -397,10 +409,10 @@ function renderImportPreview(records) {
     .map(
       (record) => `
         <tr>
-          <td>${escapeHtml(record.name)}</td>
+          <td>${escapeHtml(displayMemberName(record))}</td>
           <td>${escapeHtml(record.email || "Missing")}</td>
-          <td>${escapeHtml(record.phone || "Missing")}</td>
           <td>${escapeHtml(record.city)}</td>
+          <td>${escapeHtml(record.status || "Default")}</td>
         </tr>
       `
     )
@@ -409,14 +421,14 @@ function renderImportPreview(records) {
   importPreview.innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>City</th>
-          </tr>
-        </thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>City</th>
+              <th>Status</th>
+            </tr>
+          </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -535,9 +547,9 @@ document.querySelector("[data-import-form]")?.addEventListener("submit", (event)
 
   if (records.length === 0 && sheetUrl) {
     records = [
-      { name: "Taylor Brooks", email: "taylor@example.com", phone: "407-555-0101", city: "Orlando" },
-      { name: "Morgan Lee", email: "morgan@example.com", phone: "813-555-0102", city: "Tampa" },
-      { name: "Casey Nguyen", email: "casey@example.com", phone: "561-555-0103", city: "West Palm Beach" },
+      { firstName: "Taylor", lastName: "Brooks", name: "Taylor Brooks", email: "taylor@example.com", city: "Orlando" },
+      { firstName: "Morgan", lastName: "Lee", name: "Morgan Lee", email: "morgan@example.com", city: "Tampa" },
+      { firstName: "Casey", lastName: "Nguyen", name: "Casey Nguyen", email: "casey@example.com", city: "West Palm Beach" },
     ];
   }
 

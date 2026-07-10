@@ -45,12 +45,12 @@
                 <p class="eyebrow">VIP Access</p>
                 <h1>Claim Your VIP Card</h1>
                 <p>
-                  Enter the email or phone number connected to your VIP membership. If it matches a record, we will send a verification code.
+                  Enter the email connected to your VIP membership. If it matches a record, we will send a verification code.
                 </p>
 
                 <form class="claim-form" data-claim-form>
-                  <label for="claim-identity">Email or phone</label>
-                  <input id="claim-identity" name="identity" type="text" placeholder="avery@example.com" autocomplete="email" required>
+                  <label for="claim-identity">Email</label>
+                  <input id="claim-identity" name="identity" type="email" placeholder="avery@example.com" autocomplete="email" required>
 
                   <label for="claim-last-name">Last name</label>
                   <input id="claim-last-name" name="lastName" type="text" placeholder="Mitchell" autocomplete="family-name" required>
@@ -61,7 +61,7 @@
                     Send Code
                   </button>
                   <p class="fine-print" data-claim-message>
-                    Static demo: use avery@example.com, jordan@example.com, or 407-555-0188. Code: 246810.
+                    Static demo: use avery@example.com or jordan@example.com. Code: 246810.
                   </p>
                 </form>
 
@@ -74,7 +74,7 @@
                     Open VIP Portal
                   </button>
                   <button class="secondary-action full-width" type="button" data-change-identity>
-                    Use Different Email or Phone
+                    Use Different Email
                   </button>
                   <p class="fine-print" data-code-message></p>
                 </form>

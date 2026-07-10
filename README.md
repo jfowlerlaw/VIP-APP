@@ -18,7 +18,7 @@ For local testing, claim codes are shown in the member app after a matching VIP 
 
 ## Current Beta Flow
 
-- Members claim with email or phone plus last name.
+- Members claim with email plus last name.
 - Admins sign in with `VIP_ADMIN_PASSWORD`.
 - Admins can add VIPs, import CSV rows, publish Eventbrite links, and review concierge requests.
 - Member card names and concierge requests persist in Supabase when configured, otherwise in `data/vip-db.json`.
@@ -46,12 +46,21 @@ For Render, add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` as environment variable
 
 To import the existing VIP Google Sheet, export the sheet as CSV and import it into the `vip_members` table from the Supabase Table Editor. The most important columns are:
 
-- `name`
+- `first_name`
+- `last_name`
 - `email`
-- `phone`
+- `city`
 - `status`
 
-Optional helpful columns are `id`, `card_name`, `city`, `member_id`, and `joined`. If the sheet does not already have IDs, Supabase will generate them.
+Optional helpful columns are `id`, `name`, `card_name`, `phone`, `member_id`, and `joined`. If the sheet does not already have IDs, Supabase will generate them. If `name` and `card_name` are blank, Supabase will build them from `first_name` and `last_name`.
+
+Example:
+
+```csv
+first_name,last_name,email,city,status
+Taylor,Brooks,taylor@example.com,Orlando,Unclaimed
+Morgan,Lee,morgan@example.com,Tampa,Unclaimed
+```
 
 ## Next Production Step
 

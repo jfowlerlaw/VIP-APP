@@ -319,10 +319,17 @@ function queryString(params) {
 }
 
 function memberFromRow(row) {
+  const name = displayNameFromParts({
+    firstName: row.first_name,
+    lastName: row.last_name,
+    name: row.name,
+  });
   return {
     id: row.id,
-    name: row.name,
-    cardName: row.card_name || row.name,
+    firstName: row.first_name || firstNameFromName(name),
+    lastName: row.last_name || lastNameFromName(name),
+    name,
+    cardName: row.card_name || name,
     email: row.email || "",
     phone: row.phone || "",
     city: row.city || "",
@@ -335,10 +342,13 @@ function memberFromRow(row) {
 }
 
 function memberToRow(member) {
+  const name = displayNameFromParts(member);
   return {
     id: member.id,
-    name: member.name,
-    card_name: member.cardName || member.name,
+    first_name: member.firstName || firstNameFromName(name),
+    last_name: member.lastName || lastNameFromName(name),
+    name,
+    card_name: member.cardName || name,
     email: member.email || "",
     phone: member.phone || "",
     city: member.city || "",
@@ -352,6 +362,8 @@ function memberToRow(member) {
 
 function memberPatchToRow(patch) {
   const row = {};
+  if ("firstName" in patch) row.first_name = patch.firstName;
+  if ("lastName" in patch) row.last_name = patch.lastName;
   if ("name" in patch) row.name = patch.name;
   if ("cardName" in patch) row.card_name = patch.cardName;
   if ("email" in patch) row.email = patch.email;
@@ -363,6 +375,22 @@ function memberPatchToRow(patch) {
   if ("claimedAt" in patch) row.claimed_at = patch.claimedAt;
   if ("preferences" in patch) row.preferences = patch.preferences;
   return row;
+}
+
+function displayNameFromParts(member) {
+  const firstName = String(member.firstName || member.first_name || "").trim();
+  const lastName = String(member.lastName || member.last_name || "").trim();
+  const joinedName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const fallbackName = String(member.name || "").trim();
+  return joinedName || fallbackName || "VIP Member";
+}
+
+function firstNameFromName(name) {
+  return String(name || "").trim().split(/\s+/).filter(Boolean).at(0) || "";
+}
+
+function lastNameFromName(name) {
+  return String(name || "").trim().split(/\s+/).filter(Boolean).at(-1) || "";
 }
 
 function eventFromRow(row) {

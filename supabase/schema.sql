@@ -2,7 +2,9 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.vip_members (
   id text primary key default ('mem_' || replace(gen_random_uuid()::text, '-', '')),
-  name text not null,
+  first_name text not null default '',
+  last_name text not null default '',
+  name text not null default '',
   card_name text not null default '',
   email text not null default '',
   phone text not null default '',
@@ -15,6 +17,14 @@ create table if not exists public.vip_members (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.vip_members
+  add column if not exists first_name text not null default '',
+  add column if not exists last_name text not null default '';
+
+alter table public.vip_members
+  alter column name set default '',
+  alter column card_name set default '';
 
 create unique index if not exists vip_members_email_unique
   on public.vip_members (lower(email))
@@ -86,6 +96,43 @@ begin
   return new;
 end;
 $$ language plpgsql;
+
+create or replace function public.normalize_vip_member_names()
+returns trigger as $$
+begin
+  new.first_name = trim(coalesce(new.first_name, ''));
+  new.last_name = trim(coalesce(new.last_name, ''));
+  new.name = trim(coalesce(new.name, ''));
+  new.card_name = trim(coalesce(new.card_name, ''));
+
+  if new.name = '' then
+    new.name = trim(concat_ws(' ', nullif(new.first_name, ''), nullif(new.last_name, '')));
+  end if;
+
+  if new.first_name = '' and new.name <> '' then
+    new.first_name = split_part(new.name, ' ', 1);
+  end if;
+
+  if new.last_name = '' and new.name <> '' then
+    new.last_name = regexp_replace(new.name, '^.*\s+', '');
+  end if;
+
+  if new.name = '' then
+    new.name = 'VIP Member';
+  end if;
+
+  if new.card_name = '' then
+    new.card_name = new.name;
+  end if;
+
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists normalize_vip_member_names on public.vip_members;
+create trigger normalize_vip_member_names
+before insert or update on public.vip_members
+for each row execute function public.normalize_vip_member_names();
 
 drop trigger if exists set_vip_members_updated_at on public.vip_members;
 create trigger set_vip_members_updated_at

@@ -582,7 +582,7 @@ async function bootBetaApi() {
       applyMember(session.member);
     } catch (error) {
       if (claimMessage) {
-        claimMessage.textContent = "Enter the email or phone number connected to your VIP membership. Local beta code appears after a match.";
+        claimMessage.textContent = "Enter the email connected to your VIP membership. Local beta code appears after a match.";
       }
     }
   } catch (error) {

@@ -408,7 +408,7 @@ async function handleAdminApi(req, res, url) {
   if (route === "POST /api/admin/import") {
     const body = await readJsonBody(req);
     const records = Array.isArray(body.records) ? body.records : [];
-    const status = String(body.status || "Unclaimed");
+    const defaultStatus = String(body.status || "Unclaimed");
     const existingMembers = await vipDb.listMembers();
     const knownMembers = [...existingMembers];
     const imported = [];
@@ -430,6 +430,7 @@ async function handleAdminApi(req, res, url) {
         return;
       }
 
+      const status = String(record.status || defaultStatus);
       const member = normalizeMemberRecord({ ...record, status }, knownMembers.length + imported.length);
       knownMembers.unshift(member);
       membersToCreate.push(member);
@@ -663,13 +664,25 @@ function buildSummary(db) {
 }
 
 function normalizeMemberRecord(record, index = 0) {
-  const name = String(record.name || record.fullName || record["Full Name"] || "VIP Member").trim();
+  const firstName = String(
+    record.firstName || record.first_name || record["First Name"] || record["first name"] || ""
+  ).trim();
+  const lastName = String(
+    record.lastName || record.last_name || record["Last Name"] || record["last name"] || ""
+  ).trim();
+  const name = displayNameFromParts({
+    firstName,
+    lastName,
+    name: record.name || record.fullName || record.full_name || record["Full Name"] || record["full name"],
+  });
   const email = String(record.email || record.Email || "").trim().toLowerCase();
   const phone = digitsOnly(String(record.phone || record.Phone || ""));
   const joined = String(record.joined || new Date().getFullYear());
 
   return {
     id: `mem_${Date.now()}_${index}_${randomBytes(3).toString("hex")}`,
+    firstName: firstName || firstNameFromName(name),
+    lastName: lastName || lastNameFromName(name),
     name,
     cardName: String(record.cardName || name).trim(),
     email,
@@ -692,10 +705,13 @@ function nextMemberId(index) {
 }
 
 function publicMember(member) {
+  const name = displayNameFromParts(member);
   return {
     id: member.id,
-    name: member.name,
-    cardName: member.cardName || member.name,
+    firstName: member.firstName || firstNameFromName(name),
+    lastName: member.lastName || lastNameFromName(name),
+    name,
+    cardName: member.cardName || name,
     email: member.email,
     phone: member.phone,
     city: member.city,
@@ -715,13 +731,29 @@ function findMemberForClaim(members, identity, lastName) {
   return members.find((member) => {
     if (member.status === "Paused") return false;
 
-    const memberLastName = member.name.split(/\s+/).pop().toLowerCase();
+    const memberLastName = String(member.lastName || lastNameFromName(member.name)).toLowerCase();
     const emailMatches = member.email.toLowerCase() === cleanIdentity;
     const phoneMatches =
       cleanPhone.length >= 4 && (member.phone === cleanPhone || member.phone.endsWith(cleanPhone));
 
     return memberLastName === cleanLastName && (emailMatches || phoneMatches);
   });
+}
+
+function displayNameFromParts(member) {
+  const firstName = String(member.firstName || member.first_name || "").trim();
+  const lastName = String(member.lastName || member.last_name || "").trim();
+  const joinedName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const fallbackName = String(member.name || "").trim();
+  return joinedName || fallbackName || "VIP Member";
+}
+
+function firstNameFromName(name) {
+  return String(name || "").trim().split(/\s+/).filter(Boolean).at(0) || "";
+}
+
+function lastNameFromName(name) {
+  return String(name || "").trim().split(/\s+/).filter(Boolean).at(-1) || "";
 }
 
 async function requireMember(req) {

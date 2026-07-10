@@ -156,25 +156,23 @@
                 </label>
                 <label>
                   Or paste CSV rows
-                  <textarea name="csvRows" rows="6">Full Name,Email,Phone,City
-Taylor Brooks,taylor@example.com,407-555-0101,Orlando
-Morgan Lee,morgan@example.com,813-555-0102,Tampa
-Casey Nguyen,casey@example.com,561-555-0103,West Palm Beach</textarea>
+                  <textarea name="csvRows" rows="6">first_name,last_name,email,city,status
+Taylor,Brooks,taylor@example.com,Orlando,Unclaimed
+Morgan,Lee,morgan@example.com,Tampa,Unclaimed
+Casey,Nguyen,casey@example.com,West Palm Beach,Unclaimed</textarea>
                 </label>
                 <div class="two-col">
                   <label>
                     Match on
                     <select name="matchOn">
-                      <option>Email or phone</option>
                       <option>Email only</option>
-                      <option>Phone only</option>
                     </select>
                   </label>
                   <label>
                     Default status
                     <select name="status">
-                      <option>Active</option>
                       <option>Unclaimed</option>
+                      <option>Active</option>
                       <option>Paused</option>
                     </select>
                   </label>
@@ -204,7 +202,6 @@ Casey Nguyen,casey@example.com,561-555-0103,West Palm Beach</textarea>
                 <p>Preview rows from your Google Sheet or pasted CSV before importing.</p>
               </div>
               <div class="check-list">
-                <label><input type="checkbox" checked> Normalize phone numbers</label>
                 <label><input type="checkbox" checked> Skip duplicate emails</label>
                 <label><input type="checkbox" checked> Mark accounts as unclaimed until verified</label>
               </div>

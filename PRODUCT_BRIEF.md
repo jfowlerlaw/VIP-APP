@@ -23,7 +23,7 @@ The page describes the VIP program around these member benefits:
 
 The first version should include:
 
-- Claim flow where VIPs enter email/phone plus last name, receive a verification code, and open their card
+- Claim flow where VIPs enter email plus last name, receive a verification code, and open their card
 - Digital VIP card with the member name rendered on the card graphic in an etched style, plus member ID and VIP status
 - Apple Wallet and Google Wallet pass delivery
 - VIP snapshot showing next invite and concierge availability
@@ -100,7 +100,7 @@ A practical MVP stack:
 
 Core records:
 
-- `members`: name, email, phone, VIP status, member ID
+- `members`: first name, last name, email, city, VIP status, member ID
 - `member_imports`: source, uploaded by, row count, imported timestamp, skipped duplicates
 - `wallet_passes`: member ID, pass serial, platform, status
 - `perks`: title, description, code, visibility, publish dates
