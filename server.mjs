@@ -211,19 +211,23 @@ async function handleApi(req, res, url) {
     }
 
     const claimToken = token();
-    const code = process.env.VIP_DEV_CODE || String(randomInt(100000, 999999));
+    const code = verificationCode();
     pendingClaims.set(claimToken, {
       code,
       memberId: member.id,
       expiresAt: Date.now() + 15 * 60 * 1000,
     });
 
-    console.log(`[vip beta] Verification code for ${member.name}: ${code}`);
+    if (showDevCodes()) {
+      console.log(`[vip beta] Verification code for ${member.name}: ${code}`);
+    }
+    const email = await sendVerificationEmail({ member, code });
 
     sendJson(res, 200, {
       claimToken,
       destination: maskDestination(member, identity),
       devCode: showDevCodes() ? code : undefined,
+      email,
     });
     return;
   }
@@ -556,17 +560,6 @@ async function serveStatic(req, res, url) {
 }
 
 async function sendConciergeEmail({ member, request }) {
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const fromEmail = process.env.VIP_FROM_EMAIL;
-  const fromName = process.env.VIP_FROM_NAME || "Just Call Moe VIP Portal";
-
-  if (!apiKey || !fromEmail) {
-    return {
-      status: "not_configured",
-      error: "Set SENDGRID_API_KEY and VIP_FROM_EMAIL to send email automatically.",
-    };
-  }
-
   const memberEmail = member.email || "";
   const memberPhone = member.phone || "";
   const subject = `Just Call Moe VIP Request - ${request.type}`;
@@ -590,8 +583,8 @@ async function sendConciergeEmail({ member, request }) {
       },
     ],
     from: {
-      email: fromEmail,
-      name: fromName,
+      email: process.env.VIP_FROM_EMAIL,
+      name: process.env.VIP_FROM_NAME || "Just Call Moe VIP Portal",
     },
     content: [
       {
@@ -607,6 +600,69 @@ async function sendConciergeEmail({ member, request }) {
       name: request.memberName,
     };
   }
+
+  return sendEmail(payload);
+}
+
+async function sendVerificationEmail({ member, code }) {
+  const memberEmail = member.email || "";
+
+  if (!memberEmail.includes("@")) {
+    return {
+      status: "failed",
+      error: "VIP member record does not have a valid email address.",
+    };
+  }
+
+  const content = [
+    `Hi ${member.firstName || member.name || "there"},`,
+    "",
+    "Your Just Call Moe VIP verification code is:",
+    "",
+    code,
+    "",
+    "This code expires in 15 minutes.",
+    "",
+    "If you did not request this code, you can ignore this email.",
+    "",
+    "Just Call Moe VIP Team",
+  ].join("\n");
+
+  return sendEmail({
+    personalizations: [
+      {
+        to: [{ email: memberEmail, name: member.name }],
+        subject: "Your Just Call Moe VIP verification code",
+      },
+    ],
+    from: {
+      email: process.env.VIP_FROM_EMAIL,
+      name: process.env.VIP_FROM_NAME || "Just Call Moe VIP Portal",
+    },
+    content: [
+      {
+        type: "text/plain",
+        value: content,
+      },
+    ],
+  });
+}
+
+async function sendEmail(payload) {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const fromEmail = process.env.VIP_FROM_EMAIL;
+
+  if (!apiKey || !fromEmail) {
+    return {
+      status: "not_configured",
+      error: "Set SENDGRID_API_KEY and VIP_FROM_EMAIL to send email automatically.",
+    };
+  }
+
+  payload.from = {
+    email: payload.from?.email || fromEmail,
+    name: payload.from?.name || process.env.VIP_FROM_NAME || "Just Call Moe VIP Portal",
+  };
 
   try {
     const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
@@ -898,6 +954,14 @@ function digitsOnly(value) {
 
 function token() {
   return randomBytes(24).toString("hex");
+}
+
+function verificationCode() {
+  if (showDevCodes() && process.env.VIP_DEV_CODE) {
+    return process.env.VIP_DEV_CODE;
+  }
+
+  return String(randomInt(100000, 999999));
 }
 
 function adminPassword() {

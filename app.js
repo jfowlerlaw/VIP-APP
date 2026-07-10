@@ -382,6 +382,19 @@ claimForm?.addEventListener("submit", async (event) => {
         method: "POST",
         body: JSON.stringify({ identity, lastName }),
       });
+      const emailStatus = result.email?.status;
+      const canEnterCode = Boolean(result.devCode || emailStatus === "sent");
+
+      if (!canEnterCode) {
+        pendingClaim = null;
+        pendingMember = null;
+        if (claimMessage) {
+          claimMessage.textContent =
+            "We found your VIP record, but the verification email could not be sent. Please contact vip@justcallmoe.com.";
+        }
+        return;
+      }
+
       pendingClaim = result.claimToken;
       pendingMember = null;
       form.hidden = true;

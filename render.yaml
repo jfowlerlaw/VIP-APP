@@ -13,13 +13,15 @@ services:
       - key: VIP_DEV_CODE
         value: "246810"
       - key: VIP_SHOW_CODES
-        value: "true"
+        value: "false"
       - key: VIP_REQUEST_EMAIL
         value: vip@justcallmoe.com
       - key: VIP_FROM_EMAIL
         value: vip@justcallmoe.com
       - key: VIP_FROM_NAME
         value: Just Call Moe VIP Portal
+      - key: SENDGRID_API_KEY
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SECRET_KEY

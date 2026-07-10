@@ -14,7 +14,7 @@ node server.mjs
 3. Open the member app at `http://127.0.0.1:8787/index.html`.
 4. Open the admin dashboard at `http://127.0.0.1:8787/admin.html`.
 
-For local testing, claim codes are shown in the member app after a matching VIP record is found. Set `VIP_SHOW_CODES=false` when you are ready to test real delivery.
+For local testing, claim codes are shown in the member app after a matching VIP record is found. Set `VIP_SHOW_CODES=false` when you are ready to test real email delivery.
 
 ## Current Beta Flow
 
@@ -22,8 +22,9 @@ For local testing, claim codes are shown in the member app after a matching VIP 
 - Admins sign in with `VIP_ADMIN_PASSWORD`.
 - Admins can add VIPs, import CSV rows, publish Eventbrite links, and review concierge requests.
 - Member card names and concierge requests persist in Supabase when configured, otherwise in `data/vip-db.json`.
-- Concierge requests submit through the beta server. When SendGrid is configured, they email `vip@justcallmoe.com` without opening the user's mail app.
+- Verification codes and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
 - Set `SENDGRID_API_KEY`, `VIP_FROM_EMAIL`, and `VIP_REQUEST_EMAIL` in `.env` to turn on automatic email delivery.
+- In Render, set `VIP_SHOW_CODES=false` once `SENDGRID_API_KEY` is configured so real testers receive emailed random codes instead of seeing the beta code on screen.
 
 ## Supabase Database Setup
 
