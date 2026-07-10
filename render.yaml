@@ -20,3 +20,7 @@ services:
         value: vip@justcallmoe.com
       - key: VIP_FROM_NAME
         value: Just Call Moe VIP Portal
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false

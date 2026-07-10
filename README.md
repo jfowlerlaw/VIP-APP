@@ -42,6 +42,8 @@ SUPABASE_SECRET_KEY=your-backend-secret-key
 
 Keep `SUPABASE_SECRET_KEY` server-side only. Do not paste it into browser code, GitHub, or a public document.
 
+For Render, add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` as environment variables on the web service. They are listed in `render.yaml` as `sync: false` so the real values stay out of GitHub.
+
 To import the existing VIP Google Sheet, export the sheet as CSV and import it into the `vip_members` table from the Supabase Table Editor. The most important columns are:
 
 - `name`
