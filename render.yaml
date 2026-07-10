@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: vip-app
+    env: node
+    plan: free
+    buildCommand: node --check server.mjs
+    startCommand: node server.mjs
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: VIP_ADMIN_PASSWORD
+        sync: false
+      - key: VIP_DEV_CODE
+        value: "246810"
+      - key: VIP_SHOW_CODES
+        value: "true"
+      - key: VIP_REQUEST_EMAIL
+        value: vip@justcallmoe.com
+      - key: VIP_FROM_EMAIL
+        value: vip@justcallmoe.com
+      - key: VIP_FROM_NAME
+        value: Just Call Moe VIP Portal
