@@ -92,17 +92,12 @@ function nextMemberId() {
 }
 
 function parseCsvRows(raw) {
-  const lines = raw
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const rows = parseCsvTable(raw);
 
-  if (lines.length < 2) return [];
+  if (rows.length < 2) return [];
 
-  const headers = lines[0].split(",").map((header) => header.trim().toLowerCase());
-  return lines.slice(1).map((line) => {
-    const values = line.split(",").map((value) => value.trim());
+  const headers = rows[0].map((header) => header.trim().toLowerCase());
+  return rows.slice(1).map((values) => {
     const record = Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
     const firstName = record.first_name || record["first name"] || record.firstname || "";
     const lastName = record.last_name || record["last name"] || record.lastname || "";
@@ -117,6 +112,61 @@ function parseCsvRows(raw) {
       status: record.status || "",
     };
   });
+}
+
+function parseCsvTable(raw) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+  const input = String(raw || "").replace(/^\uFEFF/, "");
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    const nextChar = input[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(cell.trim());
+      cell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") index += 1;
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+async function getImportCsvText(form) {
+  const data = new FormData(form);
+  const csvFile = data.get("csvFile");
+
+  if (csvFile instanceof File && csvFile.size > 0) {
+    return csvFile.text();
+  }
+
+  return String(data.get("csvRows") || "");
 }
 
 function displayMemberName(member) {
@@ -537,12 +587,20 @@ document.querySelectorAll("[data-delete-event]").forEach((button) => {
   });
 });
 
-document.querySelector("[data-import-form]")?.addEventListener("submit", (event) => {
+document.querySelector("[data-import-form]")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
-  const csvRows = String(data.get("csvRows") || "");
   const sheetUrl = String(data.get("sheetUrl") || "").trim();
+  let csvRows = "";
+
+  try {
+    csvRows = await getImportCsvText(form);
+  } catch (error) {
+    showToast("CSV file could not be read.");
+    return;
+  }
+
   let records = parseCsvRows(csvRows);
 
   if (records.length === 0 && sheetUrl) {
