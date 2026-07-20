@@ -254,7 +254,7 @@ async function handleApi(req, res, url) {
 
     const updatedMember = await vipDb.updateMember(member.id, {
       claimedAt: new Date().toISOString(),
-      status: member.status === "Unclaimed" ? "Active" : member.status,
+      status: memberStatusAfterClaim(member.status),
     });
     if (!updatedMember) {
       sendJson(res, 404, { message: "Member record not found." });
@@ -345,7 +345,7 @@ async function handleApi(req, res, url) {
         passwordHash: await hashPassword(password),
         passwordSetAt: new Date().toISOString(),
         claimedAt: member.claimedAt || new Date().toISOString(),
-        status: member.status === "Unclaimed" ? "Active" : member.status,
+        status: memberStatusAfterClaim(member.status),
       });
     } catch (error) {
       if (/password_hash|password_set_at/i.test(error.message || "")) {
@@ -782,7 +782,7 @@ function loadLocalEnv() {
 
 function buildSummary(db) {
   return {
-    activeMembers: db.members.filter((member) => member.status !== "Paused").length,
+    activeMembers: db.members.filter((member) => !isPausedStatus(member.status)).length,
     openRequests: db.requests.filter((request) => request.status !== "Closed").length,
     eventLinks: db.events.filter((event) => event.visible !== false).length,
   };
@@ -868,6 +868,7 @@ function nextMemberId(index) {
 
 function publicMember(member) {
   const name = displayNameFromParts(member);
+  const status = displayMemberStatus(member);
   return {
     id: member.id,
     firstName: member.firstName || firstNameFromName(name),
@@ -879,7 +880,7 @@ function publicMember(member) {
     city: member.city,
     memberId: member.memberId,
     joined: member.joined,
-    status: member.status,
+    status,
     claimedAt: member.claimedAt,
     hasPassword: Boolean(member.passwordHash),
     passwordSetAt: member.passwordSetAt || null,
@@ -899,7 +900,7 @@ function findMemberForClaim(members, identity, lastName) {
   const cleanLastName = String(lastName || "").trim().toLowerCase();
 
   return members.find((member) => {
-    if (member.status === "Paused") return false;
+    if (isPausedStatus(member.status)) return false;
 
     const memberLastName = String(member.lastName || lastNameFromName(member.name)).toLowerCase();
     const emailMatches = member.email.toLowerCase() === cleanIdentity;
@@ -908,6 +909,25 @@ function findMemberForClaim(members, identity, lastName) {
 
     return memberLastName === cleanLastName && (emailMatches || phoneMatches);
   });
+}
+
+function displayMemberStatus(member) {
+  const status = String(member.status || "Unclaimed").trim() || "Unclaimed";
+  const isClaimed = Boolean(member.claimedAt || member.passwordSetAt || member.passwordHash);
+  return isClaimed && isUnclaimedStatus(status) ? "Active" : status;
+}
+
+function memberStatusAfterClaim(status) {
+  const cleanStatus = String(status || "").trim();
+  return !cleanStatus || isUnclaimedStatus(cleanStatus) ? "Active" : cleanStatus;
+}
+
+function isUnclaimedStatus(status) {
+  return String(status || "").trim().toLowerCase() === "unclaimed";
+}
+
+function isPausedStatus(status) {
+  return String(status || "").trim().toLowerCase() === "paused";
 }
 
 function displayNameFromParts(member) {

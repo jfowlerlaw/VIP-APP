@@ -53,6 +53,12 @@ function statusClass(status) {
   return "active";
 }
 
+function displayMemberStatus(member, fallback = "Active") {
+  const rawStatus = String(member.status || fallback || "Unclaimed").trim() || "Unclaimed";
+  const isClaimed = Boolean(member.claimedAt || member.hasPassword || member.passwordSetAt);
+  return isClaimed && rawStatus.toLowerCase() === "unclaimed" ? "Active" : rawStatus;
+}
+
 function renderSummary(summary) {
   const memberMetric = document.querySelector("[data-metric-members]");
   const requestMetric = document.querySelector("[data-metric-requests]");
@@ -220,6 +226,7 @@ function addMemberRow(member, status = "Active", placement = "prepend") {
   if (!memberTable) return;
   const { email, city, memberId = nextMemberId() } = member;
   const name = displayMemberName(member);
+  const visibleStatus = displayMemberStatus(member, status);
   const row = document.createElement("tr");
   row.dataset.memberId = member.id || "";
   row.dataset.memberName = name;
@@ -240,8 +247,8 @@ function addMemberRow(member, status = "Active", placement = "prepend") {
   row.children[1].textContent = email || "missing email";
   row.children[2].textContent = memberId;
   const pill = row.querySelector(".status-pill");
-  pill.textContent = member.status || status;
-  pill.className = `status-pill ${statusClass(member.status || status)}`;
+  pill.textContent = visibleStatus;
+  pill.className = `status-pill ${statusClass(visibleStatus)}`;
   row.querySelector("[data-preview-member-action]").addEventListener("click", () => previewCardName(name));
   row.querySelector("[data-delete-member]").addEventListener("click", () => deleteMember(row));
   if (placement === "append") {
