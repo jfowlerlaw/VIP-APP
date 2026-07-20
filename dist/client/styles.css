@@ -13,6 +13,7 @@
   --blue: #285b85;
   --green: #17745b;
   --shadow: 0 18px 50px rgba(23, 23, 23, 0.16);
+  --soft-shadow: 0 10px 28px rgba(23, 23, 23, 0.1);
   --radius: 8px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
@@ -31,10 +32,9 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    linear-gradient(90deg, rgba(201, 31, 46, 0.08) 0 1px, transparent 1px 100%),
-    linear-gradient(0deg, rgba(40, 91, 133, 0.06) 0 1px, transparent 1px 100%),
-    #f2efe7;
-  background-size: 44px 44px;
+    linear-gradient(120deg, rgba(201, 31, 46, 0.08), transparent 34%),
+    linear-gradient(300deg, rgba(40, 91, 133, 0.09), transparent 40%),
+    #f4f1ea;
 }
 
 button,
@@ -61,7 +61,7 @@ img {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(340px, 430px) minmax(340px, 510px);
+  grid-template-columns: minmax(340px, 430px) minmax(340px, 460px);
   align-items: center;
   justify-content: center;
   gap: 40px;
@@ -78,9 +78,9 @@ img {
   width: min(100%, 390px);
   min-height: 820px;
   padding: 12px;
-  border: 1px solid rgba(23, 23, 23, 0.28);
+  border: 1px solid rgba(23, 23, 23, 0.2);
   border-radius: 34px;
-  background: #111111;
+  background: #141414;
   box-shadow: var(--shadow);
 }
 
@@ -102,7 +102,9 @@ img {
   height: 764px;
   overflow: hidden;
   border-radius: 25px;
-  background: var(--warm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 243, 234, 0.98) 34%),
+    var(--warm);
 }
 
 .app-header {
@@ -242,7 +244,7 @@ img {
 }
 
 .screen-title {
-  padding: 0 18px 10px;
+  padding: 2px 20px 12px;
 }
 
 .eyebrow {
@@ -282,7 +284,7 @@ p {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 18px 92px;
+  padding: 0 20px 96px;
   scrollbar-width: thin;
 }
 
@@ -291,12 +293,12 @@ p {
 }
 
 .vip-graphic-card {
-  width: calc(100% + 28px);
-  margin: 0 -14px;
-  border: 1px solid rgba(23, 23, 23, 0.12);
+  width: 100%;
+  margin: 0;
+  border: 1px solid rgba(23, 23, 23, 0.1);
   border-radius: var(--radius);
   background: #ffffff;
-  box-shadow: 0 16px 36px rgba(23, 23, 23, 0.18);
+  box-shadow: var(--soft-shadow);
 }
 
 .card-art {
@@ -346,7 +348,7 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 14px;
+  padding: 14px 15px;
 }
 
 .pass-label {
@@ -369,13 +371,6 @@ p {
   color: var(--soft-ink);
   font-size: 0.83rem;
   font-weight: 800;
-}
-
-.wallet-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 14px 0;
 }
 
 .primary-action,
@@ -412,20 +407,25 @@ p {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .action-tile {
   display: grid;
   place-items: center;
-  min-height: 82px;
+  min-height: 78px;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--ink);
   background: #ffffff;
+  box-shadow: 0 6px 16px rgba(23, 23, 23, 0.05);
   text-align: center;
   text-decoration: none;
+}
+
+.action-tile svg {
+  color: var(--red);
 }
 
 .action-tile span:last-child {
@@ -450,6 +450,7 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #ffffff;
+  box-shadow: 0 6px 16px rgba(23, 23, 23, 0.05);
 }
 
 .snapshot-row > svg {
@@ -871,11 +872,11 @@ p {
 }
 
 .build-panel {
-  max-width: 510px;
+  max-width: 460px;
   padding: 28px;
   border: 1px solid rgba(23, 23, 23, 0.14);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 12px 30px rgba(23, 23, 23, 0.08);
 }
 
@@ -913,7 +914,8 @@ p {
   display: block;
   margin-bottom: 6px;
   color: var(--red);
-  font-size: 1.64rem;
+  font-size: 1.1rem;
+  line-height: 1.08;
 }
 
 .metric-grid span {
@@ -1032,7 +1034,7 @@ p {
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   body {
     background: var(--warm);
   }
@@ -1085,10 +1087,6 @@ p {
 
   .etched-name {
     font-size: 0.62rem;
-  }
-
-  .wallet-row {
-    grid-template-columns: 1fr;
   }
 
   .quick-actions {
