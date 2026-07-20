@@ -221,6 +221,30 @@ img {
   font-size: 2.15rem;
 }
 
+.auth-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+}
+
+.auth-switch button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--soft-ink);
+  background: transparent;
+  font-weight: 900;
+}
+
+.auth-switch button.is-selected {
+  color: var(--inverse-text);
+  background: var(--inverse);
+}
+
 .claim-form {
   display: grid;
   gap: 10px;
@@ -765,6 +789,7 @@ p {
 }
 
 .request-form select,
+.request-form input,
 .request-form textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -778,10 +803,23 @@ p {
   padding: 0 10px;
 }
 
+.request-form input {
+  height: 44px;
+  padding: 0 10px;
+}
+
 .request-form textarea {
   min-height: 104px;
   padding: 10px;
   resize: vertical;
+}
+
+.password-card {
+  margin-top: 14px;
+}
+
+.password-card p:not(.eyebrow) {
+  margin-bottom: 0;
 }
 
 .fine-print {

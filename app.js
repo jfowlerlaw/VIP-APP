@@ -9,8 +9,16 @@ const avatar = document.querySelector(".avatar");
 const appScreen = document.querySelector(".app-screen");
 const claimForm = document.querySelector("[data-claim-form]");
 const codeForm = document.querySelector("[data-code-form]");
+const passwordLoginForm = document.querySelector("[data-password-login-form]");
+const passwordSetupForm = document.querySelector("[data-password-setup-form]");
 const claimMessage = document.querySelector("[data-claim-message]");
 const codeMessage = document.querySelector("[data-code-message]");
+const passwordLoginMessage = document.querySelector("[data-password-login-message]");
+const passwordMessage = document.querySelector("[data-password-message]");
+const passwordTitle = document.querySelector("[data-password-title]");
+const passwordCopy = document.querySelector("[data-password-copy]");
+const passwordSubmitLabel = document.querySelector("[data-password-submit-label]");
+const authModeButtons = document.querySelectorAll("[data-auth-mode]");
 const eventsList = document.querySelector("[data-events-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
@@ -187,6 +195,7 @@ function applyMember(member) {
   activeMember = member;
   const displayName = member.cardName || member.name;
   updateMemberName(displayName);
+  updatePasswordSetup(member);
 
   if (cardNameInput) {
     cardNameInput.value = displayName;
@@ -206,7 +215,46 @@ function applyMember(member) {
 
   appScreen?.classList.add("is-authenticated");
   document.querySelector("[data-auth-screen]")?.setAttribute("hidden", "");
-  showToast(`Welcome back, ${displayName}.`);
+  showToast(
+    member.hasPassword
+      ? `Welcome back, ${displayName}.`
+      : "Welcome back. Add a password in Profile to skip codes next time."
+  );
+}
+
+function updatePasswordSetup(member) {
+  if (!passwordTitle || !passwordCopy || !passwordSubmitLabel || !passwordMessage) return;
+
+  if (member?.hasPassword) {
+    passwordTitle.textContent = "Password set";
+    passwordCopy.textContent = "You can sign in with your email and password next time.";
+    passwordSubmitLabel.textContent = "Update Password";
+    passwordMessage.textContent = "Enter a new password here if you ever want to change it.";
+    return;
+  }
+
+  passwordTitle.textContent = "Create a password";
+  passwordCopy.textContent = "Create a password after verification so next time you can sign in without waiting for a code.";
+  passwordSubmitLabel.textContent = "Save Password";
+  passwordMessage.textContent = "Use at least 8 characters.";
+}
+
+function setAuthMode(mode) {
+  const nextMode = mode === "password" ? "password" : "code";
+  authModeButtons.forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.authMode === nextMode);
+  });
+
+  if (claimForm) claimForm.hidden = nextMode !== "code";
+  if (passwordLoginForm) passwordLoginForm.hidden = nextMode !== "password";
+  if (codeForm) codeForm.hidden = true;
+
+  if (claimMessage) {
+    claimMessage.textContent = "Use the email address connected to your VIP membership.";
+  }
+  if (passwordLoginMessage) {
+    passwordLoginMessage.textContent = "Use this after you create a password in your VIP profile.";
+  }
 }
 
 function parseEventDate(event) {
@@ -371,6 +419,12 @@ if (themeMedia) {
   }
 }
 
+authModeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setAuthMode(button.dataset.authMode);
+  });
+});
+
 document.querySelectorAll("[data-sheet-open]").forEach((button) => {
   button.addEventListener("click", () => {
     const sheet = document.getElementById(button.dataset.sheetOpen);
@@ -473,6 +527,27 @@ claimForm?.addEventListener("submit", async (event) => {
   }
 });
 
+passwordLoginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const email = String(data.get("email") || "");
+  const password = String(data.get("password") || "");
+
+  try {
+    const result = await apiRequest("/api/login/password", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    form.reset();
+    applyMember(result.member);
+  } catch (error) {
+    if (passwordLoginMessage) {
+      passwordLoginMessage.textContent = error.message || "Email or password did not match.";
+    }
+  }
+});
+
 codeForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -508,13 +583,51 @@ codeForm?.addEventListener("submit", async (event) => {
 document.querySelector("[data-change-identity]")?.addEventListener("click", () => {
   pendingMember = null;
   pendingClaim = null;
-  if (claimForm) claimForm.hidden = false;
+  setAuthMode("code");
   if (codeForm) {
     codeForm.hidden = true;
     codeForm.reset();
   }
   if (claimMessage) {
     claimMessage.textContent = "Use the email address connected to your VIP membership.";
+  }
+});
+
+passwordSetupForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const password = String(data.get("password") || "");
+  const confirmPassword = String(data.get("confirmPassword") || "");
+
+  if (password.length < 8) {
+    if (passwordMessage) passwordMessage.textContent = "Use at least 8 characters.";
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    if (passwordMessage) passwordMessage.textContent = "Those passwords do not match.";
+    return;
+  }
+
+  if (!activeMember) {
+    if (passwordMessage) passwordMessage.textContent = "Please sign in before creating a password.";
+    return;
+  }
+
+  try {
+    const result = await apiRequest("/api/profile/password", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+    activeMember = result.member;
+    updatePasswordSetup(result.member);
+    form.reset();
+    showToast("Password saved.");
+  } catch (error) {
+    if (passwordMessage) {
+      passwordMessage.textContent = error.message || "Password could not be saved.";
+    }
   }
 });
 

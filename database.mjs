@@ -337,6 +337,8 @@ function memberFromRow(row) {
     joined: row.joined || "",
     status: row.status || "Unclaimed",
     claimedAt: row.claimed_at,
+    passwordHash: row.password_hash || "",
+    passwordSetAt: row.password_set_at || null,
     preferences: row.preferences || {},
   };
 }
@@ -373,6 +375,8 @@ function memberPatchToRow(patch) {
   if ("joined" in patch) row.joined = patch.joined;
   if ("status" in patch) row.status = patch.status;
   if ("claimedAt" in patch) row.claimed_at = patch.claimedAt;
+  if ("passwordHash" in patch) row.password_hash = patch.passwordHash;
+  if ("passwordSetAt" in patch) row.password_set_at = patch.passwordSetAt;
   if ("preferences" in patch) row.preferences = patch.preferences;
   return row;
 }

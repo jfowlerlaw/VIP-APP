@@ -13,6 +13,8 @@ create table if not exists public.vip_members (
   joined text not null default '',
   status text not null default 'Unclaimed',
   claimed_at timestamptz,
+  password_hash text not null default '',
+  password_set_at timestamptz,
   preferences jsonb not null default '{"smsAlerts": true, "emailUpdates": true, "walletUpdates": true}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -20,7 +22,9 @@ create table if not exists public.vip_members (
 
 alter table public.vip_members
   add column if not exists first_name text not null default '',
-  add column if not exists last_name text not null default '';
+  add column if not exists last_name text not null default '',
+  add column if not exists password_hash text not null default '',
+  add column if not exists password_set_at timestamptz;
 
 alter table public.vip_members
   alter column name set default '',

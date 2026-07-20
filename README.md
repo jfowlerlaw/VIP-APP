@@ -1,6 +1,6 @@
 # Just Call Moe VIP Portal Beta
 
-This folder contains a mobile-first Just Call Moe VIP client portal and an admin dashboard. The static prototype still works, and `server.mjs` adds the first beta layer: persisted VIP records, claim-code login, admin authentication, CSV import, Eventbrite link management, and concierge requests.
+This folder contains a mobile-first Just Call Moe VIP client portal and an admin dashboard. The static prototype still works, and `server.mjs` adds the first beta layer: persisted VIP records, claim-code login, member password login, admin authentication, CSV import, Eventbrite link management, and concierge requests.
 
 ## Local Beta Test
 
@@ -18,11 +18,12 @@ For local testing, claim codes are shown in the member app after a matching VIP 
 
 ## Current Beta Flow
 
-- Members claim with email plus last name.
+- Members claim with email plus last name, receive a verification code, then can create a password in Profile.
+- Returning members with a saved password can sign in with email plus password instead of getting a code every time.
 - Admins sign in with `VIP_ADMIN_PASSWORD`.
 - Admins can add VIPs, import CSV rows, publish Eventbrite links, and review concierge requests.
 - Member card names and concierge requests persist in Supabase when configured, otherwise in `data/vip-db.json`.
-- Verification codes and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
+- Verification codes, password login, and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
 - Set `SENDGRID_API_KEY`, `VIP_FROM_EMAIL`, and `VIP_REQUEST_EMAIL` in `.env` to turn on automatic email delivery.
 - In Render, set `VIP_SHOW_CODES=false` once `SENDGRID_API_KEY` is configured so real testers receive emailed random codes instead of seeing the beta code on screen.
 
@@ -55,6 +56,8 @@ To import the existing VIP Google Sheet, export the sheet as CSV and upload it f
 
 Optional helpful columns are `id`, `name`, `card_name`, `phone`, `member_id`, and `joined`. If the sheet does not already have IDs, Supabase will generate them. If `name` and `card_name` are blank, Supabase will build them from `first_name` and `last_name`.
 
+Password login uses the `password_hash` and `password_set_at` columns in `supabase/schema.sql`. Existing Supabase projects can rerun the schema safely because the member-table additions use `add column if not exists`.
+
 The admin importer also accepts common name-header variations such as `First`, `Last`, `First Name`, and `Last Name`.
 
 Example:
@@ -67,7 +70,7 @@ Morgan,Lee,Tampa,morgan@example.com,Unclaimed
 
 ## Next Production Step
 
-Before inviting a larger beta group, finish Supabase setup, import the VIP list, replace visible local codes with production email/SMS delivery, monitor concierge email delivery, and deploy the app to an HTTPS URL.
+Before inviting a larger beta group, finish Supabase setup, import the VIP list, confirm password setup works after verification, monitor concierge email delivery, and deploy the app to an HTTPS URL.
 
 Files:
 

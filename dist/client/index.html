@@ -76,6 +76,11 @@
                   Enter the email connected to your VIP membership. If it matches a record, we will send a verification code.
                 </p>
 
+                <div class="auth-switch" aria-label="Sign-in method">
+                  <button class="is-selected" type="button" data-auth-mode="code">Email code</button>
+                  <button type="button" data-auth-mode="password">Password</button>
+                </div>
+
                 <form class="claim-form" data-claim-form>
                   <label for="claim-identity">Email</label>
                   <input id="claim-identity" name="identity" type="email" placeholder="you@example.com" autocomplete="email" required>
@@ -90,6 +95,23 @@
                   </button>
                   <p class="fine-print" data-claim-message>
                     Use the email address connected to your VIP membership.
+                  </p>
+                </form>
+
+                <form class="claim-form password-login-form" data-password-login-form hidden>
+                  <label for="password-login-email">Email</label>
+                  <input id="password-login-email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+
+                  <label for="password-login-password">Password</label>
+                  <input id="password-login-password" name="password" type="password" autocomplete="current-password" required>
+
+                  <button class="primary-action full-width" type="submit">
+                    <i data-lucide="lock-keyhole" aria-hidden="true"></i>
+                    <span class="fallback-icon" aria-hidden="true">L</span>
+                    Sign In
+                  </button>
+                  <p class="fine-print" data-password-login-message>
+                    Use this after you create a password in your VIP profile.
                   </p>
                 </form>
 
@@ -347,6 +369,29 @@
                   <p data-member-contact>avery@example.com</p>
                 </div>
               </div>
+
+              <form class="request-form password-card" data-password-setup-form>
+                <div>
+                  <p class="eyebrow">Account Access</p>
+                  <h2 data-password-title>Create a password</h2>
+                  <p data-password-copy>
+                    Create a password after verification so next time you can sign in without waiting for a code.
+                  </p>
+                </div>
+
+                <label for="new-password">New password</label>
+                <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+
+                <label for="confirm-password">Confirm password</label>
+                <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+
+                <button class="primary-action" type="submit" data-password-submit>
+                  <i data-lucide="key-round" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">K</span>
+                  <span data-password-submit-label>Save Password</span>
+                </button>
+                <p class="fine-print" data-password-message>Use at least 8 characters.</p>
+              </form>
 
               <div class="settings-list">
                 <label class="setting-row input-row">

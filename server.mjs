@@ -3,12 +3,14 @@ import { stat } from "node:fs/promises";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomInt, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { createDatabase } from "./database.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 loadLocalEnv();
 
+const scryptAsync = promisify(scrypt);
 const port = Number(process.env.PORT || process.argv.at(2) || 8787);
 const host = process.env.HOST || "127.0.0.1";
 const memberSessions = new Map();
@@ -16,6 +18,8 @@ const adminSessions = new Map();
 const pendingClaims = new Map();
 const maxBodyBytes = 1_000_000;
 const conciergeEmail = process.env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
+const passwordMinLength = 8;
+const passwordHashParams = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -258,17 +262,42 @@ async function handleApi(req, res, url) {
     }
     pendingClaims.delete(String(body.claimToken || ""));
 
-    const sessionToken = token();
-    memberSessions.set(sessionToken, {
-      memberId: updatedMember.id,
-      expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 30,
-    });
-
-    setCookie(res, "vip_session", sessionToken, {
-      maxAge: 60 * 60 * 24 * 30,
-      httpOnly: true,
-    });
+    createMemberSession(res, updatedMember.id);
     sendJson(res, 200, { member: publicMember(updatedMember) });
+    return;
+  }
+
+  if (route === "POST /api/login/password") {
+    const body = await readJsonBody(req);
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    const failedLoginMessage =
+      "Email or password did not match. If you have not created a password yet, use Email code first.";
+
+    if (!email.includes("@") || password.length === 0) {
+      sendJson(res, 400, { message: "Enter your email and password." });
+      return;
+    }
+
+    const db = await vipDb.readDb();
+    const member = findMemberByEmail(db.members, email);
+    if (!member || member.status === "Paused") {
+      sendJson(res, 401, { message: failedLoginMessage });
+      return;
+    }
+
+    if (!member.passwordHash) {
+      sendJson(res, 401, { message: failedLoginMessage });
+      return;
+    }
+
+    if (!(await verifyPassword(password, member.passwordHash))) {
+      sendJson(res, 401, { message: failedLoginMessage });
+      return;
+    }
+
+    createMemberSession(res, member.id);
+    sendJson(res, 200, { member: publicMember(member) });
     return;
   }
 
@@ -288,6 +317,46 @@ async function handleApi(req, res, url) {
         ...body.preferences,
       },
     });
+    if (!storedMember) {
+      sendJson(res, 404, { message: "Member record not found." });
+      return;
+    }
+    sendJson(res, 200, { member: publicMember(storedMember) });
+    return;
+  }
+
+  if (route === "POST /api/profile/password") {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Not signed in" });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const password = String(body.password || "");
+    if (password.length < passwordMinLength) {
+      sendJson(res, 400, { message: `Use at least ${passwordMinLength} characters for your password.` });
+      return;
+    }
+
+    let storedMember;
+    try {
+      storedMember = await vipDb.updateMember(member.id, {
+        passwordHash: await hashPassword(password),
+        passwordSetAt: new Date().toISOString(),
+        claimedAt: member.claimedAt || new Date().toISOString(),
+        status: member.status === "Unclaimed" ? "Active" : member.status,
+      });
+    } catch (error) {
+      if (/password_hash|password_set_at/i.test(error.message || "")) {
+        sendJson(res, 500, {
+          message: "Password storage is not set up yet. Run the latest Supabase schema SQL first.",
+        });
+        return;
+      }
+      throw error;
+    }
+
     if (!storedMember) {
       sendJson(res, 404, { message: "Member record not found." });
       return;
@@ -812,8 +881,16 @@ function publicMember(member) {
     joined: member.joined,
     status: member.status,
     claimedAt: member.claimedAt,
+    hasPassword: Boolean(member.passwordHash),
+    passwordSetAt: member.passwordSetAt || null,
     preferences: member.preferences || {},
   };
+}
+
+function findMemberByEmail(members, email) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  if (!cleanEmail) return null;
+  return members.find((member) => String(member.email || "").toLowerCase() === cleanEmail) || null;
 }
 
 function findMemberForClaim(members, identity, lastName) {
@@ -856,6 +933,19 @@ async function requireMember(req) {
   if (!session || session.expiresAt < Date.now()) return null;
 
   return vipDb.getMemberById(session.memberId);
+}
+
+function createMemberSession(res, memberId) {
+  const sessionToken = token();
+  memberSessions.set(sessionToken, {
+    memberId,
+    expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 30,
+  });
+
+  setCookie(res, "vip_session", sessionToken, {
+    maxAge: 60 * 60 * 24 * 30,
+    httpOnly: true,
+  });
 }
 
 function removeMemberSessions(memberId) {
@@ -962,6 +1052,46 @@ function verificationCode() {
   }
 
   return String(randomInt(100000, 999999));
+}
+
+async function hashPassword(password) {
+  const salt = randomBytes(16).toString("hex");
+  const derivedKey = await scryptAsync(password, salt, 64, passwordHashParams);
+  return [
+    "scrypt",
+    passwordHashParams.N,
+    passwordHashParams.r,
+    passwordHashParams.p,
+    salt,
+    Buffer.from(derivedKey).toString("hex"),
+  ].join("$");
+}
+
+async function verifyPassword(password, storedHash) {
+  const [algorithm, rawN, rawR, rawP, salt, hash] = String(storedHash || "").split("$");
+  if (algorithm !== "scrypt" || !salt || !hash) return false;
+
+  const expected = Buffer.from(hash, "hex");
+  if (expected.length === 0) return false;
+
+  const options = {
+    N: Number(rawN),
+    r: Number(rawR),
+    p: Number(rawP),
+    maxmem: passwordHashParams.maxmem,
+  };
+
+  if (!Number.isFinite(options.N) || !Number.isFinite(options.r) || !Number.isFinite(options.p)) {
+    return false;
+  }
+
+  try {
+    const derivedKey = await scryptAsync(password, salt, expected.length, options);
+    const actual = Buffer.from(derivedKey);
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch (error) {
+    return false;
+  }
 }
 
 function adminPassword() {
