@@ -15,8 +15,12 @@ const dateStrip = document.querySelector("[data-date-strip]");
 const eventsList = document.querySelector("[data-events-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
+const themeToggles = document.querySelectorAll("[data-theme-toggle]");
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const conciergeEmail = "vip@justcallmoe.com";
 const demoCode = "246810";
+const themeStorageKey = "jcm-vip-theme";
+const themeMedia = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 const demoMembers = [
   {
     name: "Avery Mitchell",
@@ -45,6 +49,45 @@ let pendingClaim = null;
 let activeMember = null;
 let betaApiReady = false;
 let toastTimer;
+
+function getStoredTheme() {
+  try {
+    const theme = localStorage.getItem(themeStorageKey);
+    return theme === "dark" || theme === "light" ? theme : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function getPreferredTheme() {
+  return getStoredTheme() || (themeMedia?.matches ? "dark" : "light");
+}
+
+function applyTheme(theme, options = {}) {
+  const nextTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = nextTheme;
+  themeColorMeta?.setAttribute("content", nextTheme === "dark" ? "#141312" : "#f7f3ea");
+
+  const isDark = nextTheme === "dark";
+  themeToggles.forEach((toggle) => {
+    toggle.setAttribute("aria-pressed", String(isDark));
+    toggle.setAttribute("aria-label", isDark ? "Turn on light mode" : "Turn on dark mode");
+  });
+
+  if (options.persist) {
+    try {
+      localStorage.setItem(themeStorageKey, nextTheme);
+    } catch (error) {
+      // Local storage can be unavailable in private browsing contexts.
+    }
+  }
+
+  if (options.notify) {
+    showToast(`${nextTheme === "dark" ? "Dark" : "Light"} mode on.`);
+  }
+}
+
+applyTheme(getPreferredTheme());
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
@@ -344,6 +387,27 @@ document.querySelectorAll("[data-view-shortcut]").forEach((button) => {
     activateView(button.dataset.viewShortcut, button.dataset.title);
   });
 });
+
+themeToggles.forEach((toggle) => {
+  toggle.addEventListener("click", () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme, { persist: true, notify: true });
+  });
+});
+
+if (themeMedia) {
+  const syncSystemTheme = (event) => {
+    if (!getStoredTheme()) {
+      applyTheme(event.matches ? "dark" : "light");
+    }
+  };
+
+  if (typeof themeMedia.addEventListener === "function") {
+    themeMedia.addEventListener("change", syncSystemTheme);
+  } else if (typeof themeMedia.addListener === "function") {
+    themeMedia.addListener(syncSystemTheme);
+  }
+}
 
 document.querySelectorAll("[data-sheet-open]").forEach((button) => {
   button.addEventListener("click", () => {

@@ -8,6 +8,20 @@
       name="description"
       content="Just Call Moe VIP member portal."
     >
+    <meta name="theme-color" content="#f7f3ea">
+    <script>
+      (() => {
+        try {
+          const savedTheme = localStorage.getItem("jcm-vip-theme");
+          const prefersDark =
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.dataset.theme = savedTheme || (prefersDark ? "dark" : "light");
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="styles.css">
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="app.js"></script>
@@ -28,20 +42,34 @@
                 src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
                 alt="Just Call Moe"
               >
-              <button class="icon-button" type="button" data-sheet-open="updates-sheet" aria-label="View alerts">
-                <i data-lucide="bell" aria-hidden="true"></i>
-                <span class="fallback-icon" aria-hidden="true">!</span>
-                <span class="alert-dot" aria-hidden="true"></span>
-              </button>
+              <div class="header-actions">
+                <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Turn on dark mode" aria-pressed="false">
+                  <i class="theme-icon theme-icon-moon" data-lucide="moon" aria-hidden="true"></i>
+                  <i class="theme-icon theme-icon-sun" data-lucide="sun" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">T</span>
+                </button>
+                <button class="icon-button" type="button" data-sheet-open="updates-sheet" aria-label="View alerts">
+                  <i data-lucide="bell" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">!</span>
+                  <span class="alert-dot" aria-hidden="true"></span>
+                </button>
+              </div>
             </header>
 
             <section class="claim-screen" data-auth-screen aria-label="Claim your VIP card">
               <div class="claim-panel">
-                <img
-                  class="claim-logo"
-                  src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
-                  alt="Just Call Moe"
-                >
+                <div class="claim-topline">
+                  <img
+                    class="claim-logo"
+                    src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
+                    alt="Just Call Moe"
+                  >
+                  <button class="icon-button theme-toggle claim-theme-toggle" type="button" data-theme-toggle aria-label="Turn on dark mode" aria-pressed="false">
+                    <i class="theme-icon theme-icon-moon" data-lucide="moon" aria-hidden="true"></i>
+                    <i class="theme-icon theme-icon-sun" data-lucide="sun" aria-hidden="true"></i>
+                    <span class="fallback-icon" aria-hidden="true">T</span>
+                  </button>
+                </div>
                 <p class="eyebrow">VIP Access</p>
                 <h1>Claim Your VIP Card</h1>
                 <p>
