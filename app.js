@@ -11,7 +11,6 @@ const claimForm = document.querySelector("[data-claim-form]");
 const codeForm = document.querySelector("[data-code-form]");
 const claimMessage = document.querySelector("[data-claim-message]");
 const codeMessage = document.querySelector("[data-code-message]");
-const dateStrip = document.querySelector("[data-date-strip]");
 const eventsList = document.querySelector("[data-events-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
@@ -210,41 +209,6 @@ function applyMember(member) {
   showToast(`Welcome back, ${displayName}.`);
 }
 
-function bindDatePills() {
-  document.querySelectorAll(".date-pill").forEach((button) => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll(".date-pill").forEach((pill) => pill.classList.remove("is-selected"));
-      button.classList.add("is-selected");
-      showToast(`Showing events for ${button.textContent.replace(/\s+/g, " ").trim()}.`);
-    });
-  });
-}
-
-function renderDateStrip(events) {
-  if (!dateStrip) return;
-  dateStrip.innerHTML = "";
-
-  if (events.length === 0) {
-    const button = document.createElement("button");
-    button.className = "date-pill is-selected";
-    button.type = "button";
-    button.innerHTML = "VIP<br><strong>TBD</strong>";
-    dateStrip.append(button);
-    return;
-  }
-
-  events.slice(0, 6).forEach((event, index) => {
-    const [month = "VIP", day = ""] = String(event.dateLabel || "VIP Event").split(/\s+/);
-    const button = document.createElement("button");
-    button.className = `date-pill${index === 0 ? " is-selected" : ""}`;
-    button.type = "button";
-    button.innerHTML = `${month}<br><strong>${day}</strong>`;
-    dateStrip.append(button);
-  });
-
-  bindDatePills();
-}
-
 function parseEventDate(event) {
   const dateLabel = String(event.dateLabel || "").trim();
   const monthMatch = dateLabel.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})/i);
@@ -321,7 +285,6 @@ function renderEvents(events) {
       </div>
     `;
     eventsList.append(emptyState);
-    renderDateStrip([]);
     updateNextInvite([]);
     return;
   }
@@ -366,7 +329,6 @@ function renderEvents(events) {
     eventsList.append(article);
   });
 
-  renderDateStrip(orderedEvents);
   updateNextInvite(orderedEvents);
 }
 
@@ -564,8 +526,6 @@ document.querySelectorAll("[data-toggle-alert]").forEach((button) => {
     showToast(`Merch alerts ${isOn ? "paused" : "enabled"}.`);
   });
 });
-
-bindDatePills();
 
 document.querySelectorAll(".request-form").forEach((form) => {
   form.addEventListener("submit", async (event) => {

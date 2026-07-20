@@ -657,34 +657,6 @@ p {
   font-weight: 700;
 }
 
-.calendar-strip {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.date-pill {
-  min-height: 64px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  color: var(--ink);
-  background: var(--surface);
-  line-height: 1.18;
-}
-
-.date-pill strong {
-  display: inline-block;
-  margin-top: 3px;
-  font-size: 1.18rem;
-}
-
-.date-pill.is-selected {
-  border-color: var(--red);
-  color: #ffffff;
-  background: var(--red);
-}
-
 .event-list {
   display: grid;
   gap: 14px;
