@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Just Call Moe VIP Portal Beta</title>
+    <title>Just Call Moe VIP Portal</title>
     <meta
       name="description"
-      content="Local beta for the Just Call Moe VIP member portal."
+      content="Just Call Moe VIP member portal."
     >
     <link rel="stylesheet" href="styles.css">
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="app.js"></script>
   </head>
   <body>
-    <main class="workspace" aria-label="Just Call Moe VIP portal beta">
-      <section class="phone-shell" aria-label="Mobile app preview">
+    <main class="workspace" aria-label="Just Call Moe VIP portal">
+      <section class="phone-shell" aria-label="VIP member portal">
         <div class="phone-frame">
           <div class="status-bar" aria-hidden="true">
             <span>9:41</span>
@@ -50,24 +50,24 @@
 
                 <form class="claim-form" data-claim-form>
                   <label for="claim-identity">Email</label>
-                  <input id="claim-identity" name="identity" type="email" placeholder="avery@example.com" autocomplete="email" required>
+                  <input id="claim-identity" name="identity" type="email" placeholder="you@example.com" autocomplete="email" required>
 
                   <label for="claim-last-name">Last name</label>
-                  <input id="claim-last-name" name="lastName" type="text" placeholder="Mitchell" autocomplete="family-name" required>
+                  <input id="claim-last-name" name="lastName" type="text" placeholder="Last name" autocomplete="family-name" required>
 
                   <button class="primary-action full-width" type="submit">
                     <i data-lucide="key-round" aria-hidden="true"></i>
                     <span class="fallback-icon" aria-hidden="true">K</span>
-                    Send Code
+                    Email Verification Code
                   </button>
                   <p class="fine-print" data-claim-message>
-                    Static demo: use avery@example.com or jordan@example.com. Code: 246810.
+                    Use the email address connected to your VIP membership.
                   </p>
                 </form>
 
                 <form class="claim-form code-form" data-code-form hidden>
                   <label for="claim-code">Verification code</label>
-                  <input id="claim-code" name="code" type="text" inputmode="numeric" maxlength="6" placeholder="246810" required>
+                  <input id="claim-code" name="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" required>
                   <button class="primary-action full-width" type="submit">
                     <i data-lucide="badge-check" aria-hidden="true"></i>
                     <span class="fallback-icon" aria-hidden="true">V</span>
@@ -79,7 +79,7 @@
                   <p class="fine-print" data-code-message></p>
                 </form>
 
-                <a class="claim-help" href="mailto:vip@justcallmoe.com">Need help claiming your card?</a>
+                <a class="claim-help" href="mailto:vip@justcallmoe.com?subject=VIP%20portal%20help">Having trouble? Email vip@justcallmoe.com</a>
               </div>
             </section>
 
@@ -408,33 +408,33 @@
         </div>
       </section>
 
-      <aside class="build-panel" aria-label="Implementation summary">
+      <aside class="build-panel" aria-label="VIP support summary">
         <img
           class="build-logo"
           src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
           alt="Just Call Moe"
         >
-        <p class="eyebrow">Beta Direction</p>
-        <h2>VIP client portal with wallet-ready membership card.</h2>
+        <p class="eyebrow">VIP Portal</p>
+        <h2>Your Just Call Moe VIP access, all in one place.</h2>
         <p>
-          The first release should be a mobile web portal with digital card, concierge access,
-          perks, events, concierge support, and admin controls. Native apps can follow once member behavior is proven.
+          Open your VIP card, view upcoming invitations, and reach the VIP team whenever
+          you need help with your membership.
         </p>
         <div class="metric-grid">
           <div>
-            <strong>5</strong>
-            <span>Core VIP benefits</span>
+            <strong>VIP</strong>
+            <span>Member card</span>
           </div>
           <div>
-            <strong>2</strong>
-            <span>Wallet platforms</span>
+            <strong>Events</strong>
+            <span>Eventbrite invites</span>
           </div>
           <div>
-            <strong>1</strong>
-            <span>Admin console</span>
+            <strong>Support</strong>
+            <span>vip@justcallmoe.com</span>
           </div>
         </div>
-        <a class="brief-link" href="PRODUCT_BRIEF.md">Open Product Brief</a>
+        <a class="brief-link" href="mailto:vip@justcallmoe.com?subject=VIP%20portal%20help">Contact VIP Support</a>
       </aside>
     </main>
 

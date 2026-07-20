@@ -390,7 +390,7 @@ claimForm?.addEventListener("submit", async (event) => {
         pendingMember = null;
         if (claimMessage) {
           claimMessage.textContent =
-            "We found your VIP record, but the verification email could not be sent. Please contact vip@justcallmoe.com.";
+            "We found your VIP record, but the verification email could not be sent. Please email vip@justcallmoe.com for help.";
         }
         return;
       }
@@ -403,7 +403,7 @@ claimForm?.addEventListener("submit", async (event) => {
         codeForm.querySelector("input")?.focus();
       }
       if (codeMessage) {
-        codeMessage.textContent = `Code sent to ${result.destination}.${result.devCode ? ` Beta code: ${result.devCode}.` : ""}`;
+        codeMessage.textContent = `Code sent to ${result.destination}.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`;
       }
       return;
     } catch (error) {
@@ -416,12 +416,21 @@ claimForm?.addEventListener("submit", async (event) => {
     }
   }
 
+  if (!betaApiReady) {
+    pendingMember = null;
+    if (claimMessage) {
+      claimMessage.textContent =
+        "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
+    }
+    return;
+  }
+
   const member = findDemoMember(identity, lastName);
 
   if (!member) {
     pendingMember = null;
     if (claimMessage) {
-      claimMessage.textContent = "If this matches a VIP record, we will send a code. Static demo tip: try avery@example.com + Mitchell.";
+      claimMessage.textContent = "If this matches a VIP record, we will send a verification code.";
     }
     return;
   }
@@ -434,7 +443,7 @@ claimForm?.addEventListener("submit", async (event) => {
     codeForm.querySelector("input")?.focus();
   }
   if (codeMessage) {
-    codeMessage.textContent = `Code sent to ${maskDestination(member, identity)}. Static demo code: ${demoCode}.`;
+    codeMessage.textContent = `Code sent to ${maskDestination(member, identity)}. Test code: ${demoCode}.`;
   }
 });
 
@@ -462,7 +471,7 @@ codeForm?.addEventListener("submit", async (event) => {
 
   if (!pendingMember || code !== demoCode) {
     if (codeMessage) {
-      codeMessage.textContent = "That code did not match. Static demo code: 246810.";
+      codeMessage.textContent = "That code did not match.";
     }
     return;
   }
@@ -479,7 +488,7 @@ document.querySelector("[data-change-identity]")?.addEventListener("click", () =
     codeForm.reset();
   }
   if (claimMessage) {
-    claimMessage.textContent = "Static demo: use avery@example.com, jordan@example.com, or 407-555-0188. Code: 246810.";
+    claimMessage.textContent = "Use the email address connected to your VIP membership.";
   }
 });
 
@@ -520,7 +529,7 @@ document.querySelectorAll(".request-form").forEach((form) => {
         return;
       }
     } else {
-      showToast("Start the beta server and sign in to send concierge requests.");
+      showToast("Please sign in to send concierge requests.");
       return;
     }
 
@@ -595,7 +604,7 @@ async function bootBetaApi() {
       applyMember(session.member);
     } catch (error) {
       if (claimMessage) {
-        claimMessage.textContent = "Enter the email connected to your VIP membership. Local beta code appears after a match.";
+        claimMessage.textContent = "Use the email address connected to your VIP membership.";
       }
     }
   } catch (error) {

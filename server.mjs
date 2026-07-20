@@ -617,7 +617,7 @@ async function sendVerificationEmail({ member, code }) {
   const content = [
     `Hi ${member.firstName || member.name || "there"},`,
     "",
-    "Your Just Call Moe VIP verification code is:",
+    "Use this code to finish signing in to your Just Call Moe VIP portal:",
     "",
     code,
     "",
@@ -632,7 +632,7 @@ async function sendVerificationEmail({ member, code }) {
     personalizations: [
       {
         to: [{ email: memberEmail, name: member.name }],
-        subject: "Your Just Call Moe VIP verification code",
+        subject: "Your Just Call Moe VIP sign-in code",
       },
     ],
     from: {
