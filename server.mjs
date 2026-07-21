@@ -20,6 +20,16 @@ const maxBodyBytes = 1_000_000;
 const conciergeEmail = process.env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
 const passwordMinLength = 8;
 const passwordHashParams = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const nativeCorsOrigins = new Set([
+  "capacitor://localhost",
+  "ionic://localhost",
+  "https://localhost",
+  "http://localhost",
+  ...(process.env.VIP_NATIVE_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+]);
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -153,6 +163,13 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
     if (url.pathname.startsWith("/api/")) {
+      applyCors(req, res);
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       await handleApi(req, res, url);
       return;
     }
@@ -262,7 +279,7 @@ async function handleApi(req, res, url) {
     }
     pendingClaims.delete(String(body.claimToken || ""));
 
-    createMemberSession(res, updatedMember.id);
+    createMemberSession(req, res, updatedMember.id);
     sendJson(res, 200, { member: publicMember(updatedMember) });
     return;
   }
@@ -296,7 +313,7 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    createMemberSession(res, member.id);
+    createMemberSession(req, res, member.id);
     sendJson(res, 200, { member: publicMember(member) });
     return;
   }
@@ -955,7 +972,7 @@ async function requireMember(req) {
   return vipDb.getMemberById(session.memberId);
 }
 
-function createMemberSession(res, memberId) {
+function createMemberSession(req, res, memberId) {
   const sessionToken = token();
   memberSessions.set(sessionToken, {
     memberId,
@@ -965,6 +982,7 @@ function createMemberSession(res, memberId) {
   setCookie(res, "vip_session", sessionToken, {
     maxAge: 60 * 60 * 24 * 30,
     httpOnly: true,
+    ...nativeCookieOptions(req),
   });
 }
 
@@ -1021,6 +1039,27 @@ function sendText(res, statusCode, text) {
   res.end(text);
 }
 
+function applyCors(req, res) {
+  const origin = String(req.headers.origin || "");
+  if (!nativeCorsOrigins.has(origin)) return;
+
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Vary", "Origin");
+}
+
+function nativeCookieOptions(req) {
+  const origin = String(req.headers.origin || "");
+  if (!nativeCorsOrigins.has(origin)) return {};
+
+  return {
+    sameSite: "None",
+    secure: true,
+  };
+}
+
 function parseCookies(req) {
   return Object.fromEntries(
     String(req.headers.cookie || "")
@@ -1038,10 +1077,11 @@ function setCookie(res, name, value, options = {}) {
   const pieces = [
     `${name}=${encodeURIComponent(value)}`,
     "Path=/",
-    "SameSite=Lax",
+    `SameSite=${options.sameSite || "Lax"}`,
     `Max-Age=${options.maxAge || 3600}`,
   ];
   if (options.httpOnly) pieces.push("HttpOnly");
+  if (options.secure) pieces.push("Secure");
   res.setHeader("Set-Cookie", pieces.join("; "));
 }
 

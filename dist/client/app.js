@@ -26,6 +26,7 @@ const themeToggles = document.querySelectorAll("[data-theme-toggle]");
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const conciergeEmail = "vip@justcallmoe.com";
 const demoCode = "246810";
+const nativeApiBaseUrl = "https://vip-app-091y.onrender.com";
 const themeStorageKey = "jcm-vip-theme";
 const themeMedia = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 const demoMembers = [
@@ -96,9 +97,25 @@ function applyTheme(theme, options = {}) {
 
 applyTheme(getPreferredTheme());
 
+function isNativeShell() {
+  return (
+    window.Capacitor?.isNativePlatform?.() ||
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "ionic:"
+  );
+}
+
+function apiUrl(path) {
+  if (isNativeShell() && path.startsWith("/")) {
+    return `${nativeApiBaseUrl}${path}`;
+  }
+
+  return path;
+}
+
 async function apiRequest(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin",
+  const response = await fetch(apiUrl(path), {
+    credentials: isNativeShell() ? "include" : "same-origin",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),

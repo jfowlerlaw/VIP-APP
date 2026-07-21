@@ -16,6 +16,20 @@ node server.mjs
 
 For local testing, claim codes are shown in the member app after a matching VIP record is found. Set `VIP_SHOW_CODES=false` when you are ready to test real email delivery.
 
+## iOS TestFlight Build
+
+Capacitor wraps the web app in a native iOS project at `ios/App`. The native app uses the built files in `dist/client`, and API calls from the iPhone shell point to the live Render backend at `https://vip-app-091y.onrender.com`.
+
+Common commands:
+
+```sh
+npm run build
+npm run cap:sync
+npm run cap:open:ios
+```
+
+Use `npm run cap:sync` any time the web app changes before building in Xcode. Use `npm run cap:open:ios` to open the generated app in Xcode for simulator, device, archive, and TestFlight work.
+
 ## Current Beta Flow
 
 - Members claim with email plus last name, receive a verification code, then can create a password in Profile.

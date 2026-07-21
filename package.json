@@ -5,6 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-sites.mjs",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:add:ios": "npm run build && npx cap add ios",
+    "cap:open:ios": "npm run cap:sync && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.2"
   }
 }

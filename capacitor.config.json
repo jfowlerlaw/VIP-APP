@@ -1,0 +1,8 @@
+{
+  "appId": "com.justcallmoe.vip",
+  "appName": "Just Call Moe VIP",
+  "webDir": "dist/client",
+  "server": {
+    "androidScheme": "https"
+  }
+}
