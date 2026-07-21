@@ -155,7 +155,7 @@ async function handleApi(request, env, url) {
 
     const sessionToken = token();
     memberSessions.set(sessionToken, { memberId: member.id, expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 30 });
-    return json({ member: publicMember(member) }, 200, [
+    return json({ member: publicMember(member), sessionToken }, 200, [
       cookie("vip_session", sessionToken, { maxAge: 60 * 60 * 24 * 30, httpOnly: true }),
     ]);
   }
@@ -174,21 +174,43 @@ async function handleApi(request, env, url) {
     const member = await requireMember(request, env);
     if (!member) return json({ message: "Not signed in" }, 401);
     const body = await readJsonBody(request);
+    const type = String(body.type || "VIP request").trim() || "VIP request";
+    const message = String(body.message || "").trim();
+    if (!message) {
+      return json({ message: "Add a short message before sending." }, 400);
+    }
+
     const db = await readDb(env);
     const requestRecord = {
       id: `req_${Date.now()}_${shortId()}`,
       memberId: member.id,
       memberName: member.cardName || member.name,
-      type: String(body.type || "VIP request").trim(),
-      message: String(body.message || "").trim(),
+      type,
+      message,
       emailTo: env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com",
       status: "Open",
       createdAt: new Date().toISOString(),
-      emailStatus: "not_configured",
     };
+    const email = await sendConciergeEmail({ env, member, requestRecord });
+    requestRecord.emailStatus = email.status;
+    if (email.sentAt) requestRecord.emailSentAt = email.sentAt;
+    if (email.error) requestRecord.emailError = email.error;
+
     db.requests.unshift(requestRecord);
     await writeDb(env, db);
-    return json({ request: requestRecord, email: { status: "not_configured" } }, 201);
+    if (email.status !== "sent") {
+      return json(
+        {
+          message:
+            "The VIP desk email could not be sent. Please call 833-MOE-WINS or email vip@justcallmoe.com.",
+          request: requestRecord,
+          email,
+        },
+        502
+      );
+    }
+
+    return json({ request: requestRecord, email }, 201);
   }
   if (route === "POST /api/admin/login") {
     const body = await readJsonBody(request);
@@ -315,6 +337,98 @@ async function handleAdminApi(request, env, url) {
   return json({ message: "Admin API route not found" }, 404);
 }
 
+async function sendConciergeEmail({ env, member, requestRecord }) {
+  const memberEmail = member.email || "";
+  const memberPhone = member.phone || "";
+  const requestEmail = env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
+  const subject = `Just Call Moe VIP Request - ${requestRecord.type}`;
+  const content = [
+    `VIP Member: ${requestRecord.memberName}`,
+    `Member ID: ${member.memberId || "Unknown"}`,
+    `Email: ${memberEmail || "Not provided"}`,
+    `Phone: ${memberPhone || "Not provided"}`,
+    `Request Type: ${requestRecord.type}`,
+    `Submitted: ${requestRecord.createdAt}`,
+    "",
+    "Message:",
+    requestRecord.message,
+  ].join("\n");
+
+  const payload = {
+    personalizations: [
+      {
+        to: [{ email: requestEmail }],
+        subject,
+      },
+    ],
+    from: {
+      email: env.VIP_FROM_EMAIL,
+      name: env.VIP_FROM_NAME || "Just Call Moe VIP Portal",
+    },
+    content: [
+      {
+        type: "text/plain",
+        value: content,
+      },
+    ],
+  };
+
+  if (memberEmail.includes("@")) {
+    payload.reply_to = {
+      email: memberEmail,
+      name: requestRecord.memberName,
+    };
+  }
+
+  return sendEmail({ env, payload });
+}
+
+async function sendEmail({ env, payload }) {
+  const apiKey = env.SENDGRID_API_KEY;
+  const fromEmail = env.VIP_FROM_EMAIL;
+
+  if (!apiKey || !fromEmail) {
+    return {
+      status: "not_configured",
+      error: "Set SENDGRID_API_KEY and VIP_FROM_EMAIL to send email automatically.",
+    };
+  }
+
+  payload.from = {
+    email: payload.from?.email || fromEmail,
+    name: payload.from?.name || env.VIP_FROM_NAME || "Just Call Moe VIP Portal",
+  };
+
+  try {
+    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.status === 202) {
+      return {
+        status: "sent",
+        sentAt: new Date().toISOString(),
+      };
+    }
+
+    const errorText = await response.text();
+    return {
+      status: "failed",
+      error: errorText || `SendGrid returned ${response.status}.`,
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      error: error.message || "Email send failed.",
+    };
+  }
+}
+
 async function serveAsset(request, env, url) {
   if (!["GET", "HEAD"].includes(request.method)) {
     return new Response("Method not allowed", { status: 405 });
@@ -359,10 +473,19 @@ async function readJsonBody(request) {
 }
 
 async function requireMember(request, env) {
-  const session = memberSessions.get(parseCookies(request).vip_session);
+  const session = memberSessions.get(memberSessionTokenFromRequest(request));
   if (!session || session.expiresAt < Date.now()) return null;
   const db = await readDb(env);
   return db.members.find((member) => member.id === session.memberId) || null;
+}
+
+function memberSessionTokenFromRequest(request) {
+  const authorization = String(request.headers.get("Authorization") || "");
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  return parseCookies(request).vip_session;
 }
 
 function requireAdmin(request) {

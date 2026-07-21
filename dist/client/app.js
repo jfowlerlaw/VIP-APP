@@ -2,7 +2,7 @@ const viewTitle = document.querySelector("#view-title");
 const navItems = document.querySelectorAll("[data-view-target]");
 const views = document.querySelectorAll(".view");
 const toast = document.querySelector(".toast");
-const requestTracker = document.querySelector(".request-tracker");
+const conciergeForms = document.querySelectorAll("[data-concierge-form]");
 const cardNameInput = document.querySelector("[data-name-input]");
 const etchedName = document.querySelector(".etched-name");
 const avatar = document.querySelector(".avatar");
@@ -23,11 +23,13 @@ const eventsList = document.querySelector("[data-events-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
 const themeToggles = document.querySelectorAll("[data-theme-toggle]");
+const themeControls = document.querySelectorAll("[data-theme-choice]");
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const conciergeEmail = "vip@justcallmoe.com";
 const demoCode = "246810";
 const nativeApiBaseUrl = "https://vip-app-091y.onrender.com";
 const themeStorageKey = "jcm-vip-theme";
+const memberSessionStorageKey = "jcm-vip-session";
 const themeMedia = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 const demoMembers = [
   {
@@ -58,44 +60,64 @@ let activeMember = null;
 let betaApiReady = false;
 let toastTimer;
 
-function getStoredTheme() {
+function normalizeThemePreference(preference) {
+  return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
+}
+
+function getStoredThemePreference() {
   try {
-    const theme = localStorage.getItem(themeStorageKey);
-    return theme === "dark" || theme === "light" ? theme : null;
+    return normalizeThemePreference(localStorage.getItem(themeStorageKey));
   } catch (error) {
-    return null;
+    return "system";
   }
 }
 
-function getPreferredTheme() {
-  return getStoredTheme() || (themeMedia?.matches ? "dark" : "light");
+function resolveTheme(preference) {
+  const nextPreference = normalizeThemePreference(preference);
+  return nextPreference === "system" ? (themeMedia?.matches ? "dark" : "light") : nextPreference;
 }
 
-function applyTheme(theme, options = {}) {
-  const nextTheme = theme === "dark" ? "dark" : "light";
+function syncNativeTheme(theme) {
+  try {
+    window.webkit?.messageHandlers?.nativeTheme?.postMessage(theme);
+  } catch (error) {
+    // The browser build does not expose the iOS message handler.
+  }
+}
+
+function applyThemePreference(preference, options = {}) {
+  const nextPreference = normalizeThemePreference(preference);
+  const nextTheme = resolveTheme(nextPreference);
   document.documentElement.dataset.theme = nextTheme;
+  document.documentElement.dataset.themePreference = nextPreference;
   themeColorMeta?.setAttribute("content", nextTheme === "dark" ? "#141312" : "#f7f3ea");
+  syncNativeTheme(nextTheme);
 
   const isDark = nextTheme === "dark";
   themeToggles.forEach((toggle) => {
     toggle.setAttribute("aria-pressed", String(isDark));
     toggle.setAttribute("aria-label", isDark ? "Turn on light mode" : "Turn on dark mode");
   });
+  themeControls.forEach((control) => {
+    const isSelected = control.dataset.themeChoice === nextPreference;
+    control.setAttribute("aria-pressed", String(isSelected));
+  });
 
   if (options.persist) {
     try {
-      localStorage.setItem(themeStorageKey, nextTheme);
+      localStorage.setItem(themeStorageKey, nextPreference);
     } catch (error) {
       // Local storage can be unavailable in private browsing contexts.
     }
   }
 
   if (options.notify) {
-    showToast(`${nextTheme === "dark" ? "Dark" : "Light"} mode on.`);
+    const label = nextPreference === "system" ? "System appearance" : `${nextPreference === "dark" ? "Dark" : "Light"} mode`;
+    showToast(`${label} on.`);
   }
 }
 
-applyTheme(getPreferredTheme());
+applyThemePreference(getStoredThemePreference());
 
 function isNativeShell() {
   return (
@@ -117,14 +139,46 @@ function apiUrl(path) {
   return path;
 }
 
+function getStoredMemberSession() {
+  try {
+    return localStorage.getItem(memberSessionStorageKey) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function storeMemberSession(sessionToken) {
+  if (!sessionToken) return;
+
+  try {
+    localStorage.setItem(memberSessionStorageKey, sessionToken);
+  } catch (error) {
+    // Local storage can be unavailable in private browsing contexts.
+  }
+}
+
+function clearStoredMemberSession() {
+  try {
+    localStorage.removeItem(memberSessionStorageKey);
+  } catch (error) {
+    // Local storage can be unavailable in private browsing contexts.
+  }
+}
+
 async function apiRequest(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  const sessionToken = getStoredMemberSession();
+  if (sessionToken && !headers.Authorization) {
+    headers.Authorization = `Bearer ${sessionToken}`;
+  }
+
   const response = await fetch(apiUrl(path), {
-    credentials: isNativeShell() ? "include" : "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
     ...options,
+    credentials: isNativeShell() ? "include" : "same-origin",
+    headers,
   });
 
   const payload = await response.json().catch(() => ({}));
@@ -422,14 +476,20 @@ document.querySelectorAll("[data-view-shortcut]").forEach((button) => {
 themeToggles.forEach((toggle) => {
   toggle.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    applyTheme(nextTheme, { persist: true, notify: true });
+    applyThemePreference(nextTheme, { persist: true, notify: true });
+  });
+});
+
+themeControls.forEach((control) => {
+  control.addEventListener("click", () => {
+    applyThemePreference(control.dataset.themeChoice, { persist: true, notify: true });
   });
 });
 
 if (themeMedia) {
-  const syncSystemTheme = (event) => {
-    if (!getStoredTheme()) {
-      applyTheme(event.matches ? "dark" : "light");
+  const syncSystemTheme = () => {
+    if (getStoredThemePreference() === "system") {
+      applyThemePreference("system");
     }
   };
 
@@ -556,13 +616,14 @@ passwordLoginForm?.addEventListener("submit", async (event) => {
   const password = String(data.get("password") || "");
 
   try {
-    const result = await apiRequest("/api/login/password", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    form.reset();
-    applyMember(result.member);
-  } catch (error) {
+      const result = await apiRequest("/api/login/password", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      form.reset();
+      storeMemberSession(result.sessionToken);
+      applyMember(result.member);
+    } catch (error) {
     if (passwordLoginMessage) {
       passwordLoginMessage.textContent = error.message || "Email or password did not match.";
     }
@@ -581,6 +642,7 @@ codeForm?.addEventListener("submit", async (event) => {
         body: JSON.stringify({ claimToken: pendingClaim, code }),
       });
       pendingClaim = null;
+      storeMemberSession(result.sessionToken);
       applyMember(result.member);
       return;
     } catch (error) {
@@ -661,15 +723,26 @@ document.querySelectorAll("[data-toggle-alert]").forEach((button) => {
   });
 });
 
-document.querySelectorAll(".request-form").forEach((form) => {
+conciergeForms.forEach((form) => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const textarea = form.querySelector("textarea");
+    const statusMessage = form.querySelector("[data-request-status]");
+    const submitButton = form.querySelector("button[type='submit']");
     const type = form.querySelector("select")?.value || "VIP request";
     if (!textarea) return;
 
+    const defaultStatus =
+      "Emergency, medical, and urgent legal matters should use direct phone support or emergency services.";
+    const setStatus = (message) => {
+      if (statusMessage) {
+        statusMessage.textContent = message || defaultStatus;
+      }
+    };
+
     if (textarea && textarea.value.trim().length === 0) {
       showToast("Add a short message before sending.");
+      setStatus("Add a short message before sending.");
       textarea.focus();
       return;
     }
@@ -678,35 +751,41 @@ document.querySelectorAll(".request-form").forEach((form) => {
 
     if (betaApiReady && activeMember) {
       try {
-        await apiRequest("/api/requests", {
+        submitButton?.setAttribute("disabled", "");
+        setStatus("Sending your request to the VIP desk...");
+        const result = await apiRequest("/api/requests", {
           method: "POST",
           body: JSON.stringify({ type, message }),
         });
+
+        if (result.email?.status !== "sent") {
+          throw new Error(
+            "The VIP desk email could not be sent. Please call 833-MOE-WINS or email vip@justcallmoe.com."
+          );
+        }
       } catch (error) {
-        showToast(error.message || "Request could not be sent.");
+        if (error.status === 401) {
+          clearStoredMemberSession();
+        }
+        const message =
+          error.status === 401
+            ? "Please sign in again before sending a help request."
+            : error.message ||
+              "The VIP desk email could not be sent. Please call 833-MOE-WINS or email vip@justcallmoe.com.";
+        setStatus(message);
+        showToast(message);
         return;
+      } finally {
+        submitButton?.removeAttribute("disabled");
       }
     } else {
+      setStatus("Please sign in to send concierge requests.");
       showToast("Please sign in to send concierge requests.");
       return;
     }
 
-    if (requestTracker && textarea) {
-      const item = document.createElement("article");
-      item.className = "request-item";
-      item.innerHTML = `
-        <span class="status-chip">Sent</span>
-        <div>
-          <strong></strong>
-          <p></p>
-        </div>
-      `;
-      item.querySelector("strong").textContent = type;
-      item.querySelector("p").textContent = message;
-      requestTracker.insertBefore(item, requestTracker.children[1]);
-    }
-
-    showToast("Request received. The VIP team will follow up shortly.");
+    setStatus("Sent to the VIP desk. The team will follow up shortly.");
+    showToast("Request emailed to the VIP desk.");
     form.reset();
   });
 });
@@ -761,6 +840,9 @@ async function bootBetaApi() {
       const session = await apiRequest("/api/me");
       applyMember(session.member);
     } catch (error) {
+      if (error.status === 401) {
+        clearStoredMemberSession();
+      }
       if (claimMessage) {
         claimMessage.textContent = "Use the email address connected to your VIP membership.";
       }

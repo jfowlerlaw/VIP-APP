@@ -23,9 +23,17 @@
           const prefersDark =
             typeof window.matchMedia === "function" &&
             window.matchMedia("(prefers-color-scheme: dark)").matches;
-          document.documentElement.dataset.theme = savedTheme || (prefersDark ? "dark" : "light");
+          const preference =
+            savedTheme === "dark" || savedTheme === "light" || savedTheme === "system"
+              ? savedTheme
+              : "system";
+          const theme = preference === "system" ? (prefersDark ? "dark" : "light") : preference;
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.dataset.themePreference = preference;
+          window.webkit?.messageHandlers?.nativeTheme?.postMessage(theme);
         } catch (error) {
           document.documentElement.dataset.theme = "light";
+          document.documentElement.dataset.themePreference = "system";
         }
       })();
     </script>
@@ -298,7 +306,7 @@
                 </div>
               </div>
 
-              <form class="request-form">
+              <form class="request-form" data-concierge-form>
                 <label for="request-type">Request type</label>
                 <select id="request-type" name="request-type">
                   <option>Legal question</option>
@@ -306,35 +314,18 @@
                 </select>
 
                 <label for="message">Message</label>
-                <textarea id="message" name="message" rows="4" placeholder="How can the VIP team help?"></textarea>
+                <textarea id="message" name="message" rows="4" placeholder="How can the VIP team help?" required></textarea>
 
                 <button class="primary-action" type="submit">
                   <i data-lucide="send" aria-hidden="true"></i>
                   <span class="fallback-icon" aria-hidden="true">S</span>
                   Send Request
                 </button>
-                <p class="fine-print">
+                <p class="fine-print" data-request-status>
                   Emergency, medical, and urgent legal matters should use direct phone support or emergency services.
                 </p>
               </form>
 
-              <div class="request-tracker" aria-live="polite">
-                <h2>Recent Requests</h2>
-                <article class="request-item">
-                  <span class="status-chip">In review</span>
-                  <div>
-                    <strong>Event help</strong>
-                    <p>Question about the next VIP Eventbrite listing.</p>
-                  </div>
-                </article>
-                <article class="request-item">
-                  <span class="status-chip done">Closed</span>
-                  <div>
-                    <strong>Legal question</strong>
-                    <p>VIP desk followed up by email.</p>
-                  </div>
-                </article>
-              </div>
             </section>
 
             <section class="view" id="view-profile" aria-label="Member profile">
@@ -381,16 +372,16 @@
                     </span>
                     <input type="text" value="Avery Mitchell" data-name-input aria-label="Card name">
                   </label>
-                  <div class="setting-row">
+                  <div class="setting-row appearance-row">
                     <span>
-                      <strong>Dark mode</strong>
-                      <small>Switch between light and dark display</small>
+                      <strong>Appearance</strong>
+                      <small>Match your phone or choose a mode</small>
                     </span>
-                    <button class="setting-action theme-toggle" type="button" data-theme-toggle aria-label="Turn on dark mode" aria-pressed="false">
-                      <i class="theme-icon theme-icon-moon" data-lucide="moon" aria-hidden="true"></i>
-                      <i class="theme-icon theme-icon-sun" data-lucide="sun" aria-hidden="true"></i>
-                      <span class="fallback-icon" aria-hidden="true">T</span>
-                    </button>
+                    <div class="theme-choice" role="group" aria-label="Appearance">
+                      <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+                      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+                      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+                    </div>
                   </div>
                   <div class="setting-row">
                     <span>

@@ -279,8 +279,8 @@ async function handleApi(req, res, url) {
     }
     pendingClaims.delete(String(body.claimToken || ""));
 
-    createMemberSession(req, res, updatedMember.id);
-    sendJson(res, 200, { member: publicMember(updatedMember) });
+    const sessionToken = createMemberSession(req, res, updatedMember.id);
+    sendJson(res, 200, { member: publicMember(updatedMember), sessionToken });
     return;
   }
 
@@ -313,8 +313,8 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    createMemberSession(req, res, member.id);
-    sendJson(res, 200, { member: publicMember(member) });
+    const sessionToken = createMemberSession(req, res, member.id);
+    sendJson(res, 200, { member: publicMember(member), sessionToken });
     return;
   }
 
@@ -390,12 +390,19 @@ async function handleApi(req, res, url) {
     }
 
     const body = await readJsonBody(req);
+    const type = String(body.type || "VIP request").trim() || "VIP request";
+    const message = String(body.message || "").trim();
+    if (!message) {
+      sendJson(res, 400, { message: "Add a short message before sending." });
+      return;
+    }
+
     const request = {
       id: `req_${Date.now()}_${randomBytes(3).toString("hex")}`,
       memberId: member.id,
       memberName: member.cardName || member.name,
-      type: String(body.type || "VIP request").trim(),
-      message: String(body.message || "").trim(),
+      type,
+      message,
       emailTo: conciergeEmail,
       status: "Open",
       createdAt: new Date().toISOString(),
@@ -407,6 +414,16 @@ async function handleApi(req, res, url) {
     if (email.error) request.emailError = email.error;
 
     await vipDb.createRequest(request);
+    if (email.status !== "sent") {
+      sendJson(res, 502, {
+        message:
+          "The VIP desk email could not be sent. Please call 833-MOE-WINS or email vip@justcallmoe.com.",
+        request,
+        email,
+      });
+      return;
+    }
+
     sendJson(res, 201, { request, email });
     return;
   }
@@ -964,12 +981,20 @@ function lastNameFromName(name) {
 }
 
 async function requireMember(req) {
-  const cookies = parseCookies(req);
-  const sessionToken = cookies.vip_session;
+  const sessionToken = memberSessionTokenFromRequest(req);
   const session = sessionToken ? memberSessions.get(sessionToken) : null;
   if (!session || session.expiresAt < Date.now()) return null;
 
   return vipDb.getMemberById(session.memberId);
+}
+
+function memberSessionTokenFromRequest(req) {
+  const authorization = String(req.headers.authorization || "");
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  return parseCookies(req).vip_session;
 }
 
 function createMemberSession(req, res, memberId) {
@@ -984,6 +1009,7 @@ function createMemberSession(req, res, memberId) {
     httpOnly: true,
     ...nativeCookieOptions(req),
   });
+  return sessionToken;
 }
 
 function removeMemberSessions(memberId) {
@@ -1045,7 +1071,7 @@ function applyCors(req, res) {
 
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Vary", "Origin");
 }
