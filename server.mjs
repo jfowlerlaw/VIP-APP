@@ -391,7 +391,13 @@ async function handleApi(req, res, url) {
 
     const body = await readJsonBody(req);
     const type = String(body.type || "VIP request").trim() || "VIP request";
+    const phone = String(body.phone || "").trim();
     const message = String(body.message || "").trim();
+    if (!phone) {
+      sendJson(res, 400, { message: "Add a phone number before sending." });
+      return;
+    }
+
     if (!message) {
       sendJson(res, 400, { message: "Add a short message before sending." });
       return;
@@ -402,6 +408,7 @@ async function handleApi(req, res, url) {
       memberId: member.id,
       memberName: member.cardName || member.name,
       type,
+      phone,
       message,
       emailTo: conciergeEmail,
       status: "Open",
@@ -665,12 +672,14 @@ async function serveStatic(req, res, url) {
 async function sendConciergeEmail({ member, request }) {
   const memberEmail = member.email || "";
   const memberPhone = member.phone || "";
+  const callbackPhone = request.phone || "";
   const subject = `Just Call Moe VIP Request - ${request.type}`;
   const content = [
     `VIP Member: ${request.memberName}`,
     `Member ID: ${member.memberId || "Unknown"}`,
     `Email: ${memberEmail || "Not provided"}`,
-    `Phone: ${memberPhone || "Not provided"}`,
+    `Callback Phone: ${callbackPhone || "Not provided"}`,
+    `Member Record Phone: ${memberPhone || "Not provided"}`,
     `Request Type: ${request.type}`,
     `Submitted: ${request.createdAt}`,
     "",

@@ -276,6 +276,12 @@ function applyMember(member) {
     cardNameInput.value = displayName;
   }
 
+  document.querySelectorAll("[data-request-phone]").forEach((input) => {
+    if (!input.value.trim()) {
+      input.value = member.phone || "";
+    }
+  });
+
   document.querySelectorAll("[data-member-id]").forEach((item) => {
     item.textContent = member.memberId;
   });
@@ -727,6 +733,7 @@ conciergeForms.forEach((form) => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const textarea = form.querySelector("textarea");
+    const phoneInput = form.querySelector("[data-request-phone]");
     const statusMessage = form.querySelector("[data-request-status]");
     const submitButton = form.querySelector("button[type='submit']");
     const type = form.querySelector("select")?.value || "VIP request";
@@ -748,6 +755,13 @@ conciergeForms.forEach((form) => {
     }
 
     const message = textarea.value.trim();
+    const phone = phoneInput?.value.trim() || "";
+    if (!phone) {
+      showToast("Add a phone number before sending.");
+      setStatus("Add a phone number before sending.");
+      phoneInput?.focus();
+      return;
+    }
 
     if (betaApiReady && activeMember) {
       try {
@@ -755,7 +769,7 @@ conciergeForms.forEach((form) => {
         setStatus("Sending your request to the VIP desk...");
         const result = await apiRequest("/api/requests", {
           method: "POST",
-          body: JSON.stringify({ type, message }),
+          body: JSON.stringify({ type, phone, message }),
         });
 
         if (result.email?.status !== "sent") {

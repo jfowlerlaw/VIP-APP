@@ -175,7 +175,12 @@ async function handleApi(request, env, url) {
     if (!member) return json({ message: "Not signed in" }, 401);
     const body = await readJsonBody(request);
     const type = String(body.type || "VIP request").trim() || "VIP request";
+    const phone = String(body.phone || "").trim();
     const message = String(body.message || "").trim();
+    if (!phone) {
+      return json({ message: "Add a phone number before sending." }, 400);
+    }
+
     if (!message) {
       return json({ message: "Add a short message before sending." }, 400);
     }
@@ -186,6 +191,7 @@ async function handleApi(request, env, url) {
       memberId: member.id,
       memberName: member.cardName || member.name,
       type,
+      phone,
       message,
       emailTo: env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com",
       status: "Open",
@@ -340,13 +346,15 @@ async function handleAdminApi(request, env, url) {
 async function sendConciergeEmail({ env, member, requestRecord }) {
   const memberEmail = member.email || "";
   const memberPhone = member.phone || "";
+  const callbackPhone = requestRecord.phone || "";
   const requestEmail = env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
   const subject = `Just Call Moe VIP Request - ${requestRecord.type}`;
   const content = [
     `VIP Member: ${requestRecord.memberName}`,
     `Member ID: ${member.memberId || "Unknown"}`,
     `Email: ${memberEmail || "Not provided"}`,
-    `Phone: ${memberPhone || "Not provided"}`,
+    `Callback Phone: ${callbackPhone || "Not provided"}`,
+    `Member Record Phone: ${memberPhone || "Not provided"}`,
     `Request Type: ${requestRecord.type}`,
     `Submitted: ${requestRecord.createdAt}`,
     "",
