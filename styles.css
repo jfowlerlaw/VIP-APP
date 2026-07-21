@@ -428,11 +428,11 @@ p {
 
 .vip-graphic-card img {
   position: absolute;
-  top: 50%;
-  left: -8%;
-  width: 116%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   max-width: none;
-  transform: translateY(-50%);
+  object-fit: cover;
   background: var(--card-art-bg);
 }
 
