@@ -83,8 +83,8 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-  --native-top-space: max(var(--safe-top), 64px);
-  --native-bottom-space: max(var(--safe-bottom), 24px);
+  --native-top-space: var(--safe-top);
+  --native-bottom-space: var(--safe-bottom);
 }
 
 * {
