@@ -105,6 +105,10 @@ function isNativeShell() {
   );
 }
 
+if (isNativeShell()) {
+  document.documentElement.classList.add("native-shell");
+}
+
 function apiUrl(path) {
   if (isNativeShell() && path.startsWith("/")) {
     return `${nativeApiBaseUrl}${path}`;
