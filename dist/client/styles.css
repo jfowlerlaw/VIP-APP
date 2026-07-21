@@ -143,22 +143,11 @@ img {
   box-shadow: var(--shadow);
 }
 
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 28px;
-  padding: 0 18px;
-  color: #ffffff;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
 .app-screen {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 764px;
+  height: 796px;
   overflow: hidden;
   border-radius: 25px;
   background: var(--screen-bg);
@@ -1160,14 +1149,8 @@ p {
     box-shadow: none;
   }
 
-  .status-bar {
-    height: 26px;
-    color: var(--ink);
-    background: var(--field);
-  }
-
   .app-screen {
-    height: calc(100svh - 26px);
+    height: 100svh;
     border-radius: 0;
   }
 
