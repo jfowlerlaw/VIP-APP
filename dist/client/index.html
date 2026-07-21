@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Just Call Moe VIP Portal</title>
     <meta
       name="description"
@@ -12,6 +12,13 @@
     <script>
       (() => {
         try {
+          const nativeShell =
+            window.location.protocol === "capacitor:" ||
+            window.location.protocol === "ionic:";
+          if (nativeShell) {
+            document.documentElement.classList.add("native-shell");
+          }
+
           const savedTheme = localStorage.getItem("jcm-vip-theme");
           const prefersDark =
             typeof window.matchMedia === "function" &&
