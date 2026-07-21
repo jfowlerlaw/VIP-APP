@@ -44,34 +44,10 @@
                 src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
                 alt="Just Call Moe"
               >
-              <div class="header-actions">
-                <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Turn on dark mode" aria-pressed="false">
-                  <i class="theme-icon theme-icon-moon" data-lucide="moon" aria-hidden="true"></i>
-                  <i class="theme-icon theme-icon-sun" data-lucide="sun" aria-hidden="true"></i>
-                  <span class="fallback-icon" aria-hidden="true">T</span>
-                </button>
-                <button class="icon-button" type="button" data-sheet-open="updates-sheet" aria-label="View alerts">
-                  <i data-lucide="bell" aria-hidden="true"></i>
-                  <span class="fallback-icon" aria-hidden="true">!</span>
-                  <span class="alert-dot" aria-hidden="true"></span>
-                </button>
-              </div>
             </header>
 
             <section class="claim-screen" data-auth-screen aria-label="Claim your VIP card">
               <div class="claim-panel">
-                <div class="claim-topline">
-                  <img
-                    class="claim-logo"
-                    src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp"
-                    alt="Just Call Moe"
-                  >
-                  <button class="icon-button theme-toggle claim-theme-toggle" type="button" data-theme-toggle aria-label="Turn on dark mode" aria-pressed="false">
-                    <i class="theme-icon theme-icon-moon" data-lucide="moon" aria-hidden="true"></i>
-                    <i class="theme-icon theme-icon-sun" data-lucide="sun" aria-hidden="true"></i>
-                    <span class="fallback-icon" aria-hidden="true">T</span>
-                  </button>
-                </div>
                 <p class="eyebrow">VIP Access</p>
                 <h1>Claim Your VIP Card</h1>
                 <p>
@@ -395,36 +371,60 @@
                 <p class="fine-print" data-password-message>Use at least 8 characters.</p>
               </form>
 
-              <div class="settings-list">
-                <label class="setting-row input-row">
-                  <span>
-                    <strong>Card name</strong>
-                    <small>Shown on the VIP card</small>
-                  </span>
-                  <input type="text" value="Avery Mitchell" data-name-input aria-label="Card name">
-                </label>
-                <label class="setting-row">
-                  <span>
-                    <strong>SMS alerts</strong>
-                    <small>Events and free merchandise</small>
-                  </span>
-                  <input type="checkbox" checked>
-                </label>
-                <label class="setting-row">
-                  <span>
-                    <strong>Email updates</strong>
-                    <small>Perks, events, and VIP news</small>
-                  </span>
-                  <input type="checkbox" checked>
-                </label>
-                <label class="setting-row">
-                  <span>
-                    <strong>Wallet auto-updates</strong>
-                    <small>Refresh card status and event pass</small>
-                  </span>
-                  <input type="checkbox" checked>
-                </label>
-              </div>
+              <section class="profile-settings" aria-labelledby="profile-settings-title">
+                <h2 id="profile-settings-title">Settings</h2>
+                <div class="settings-list">
+                  <label class="setting-row input-row">
+                    <span>
+                      <strong>Card name</strong>
+                      <small>Shown on the VIP card</small>
+                    </span>
+                    <input type="text" value="Avery Mitchell" data-name-input aria-label="Card name">
+                  </label>
+                  <div class="setting-row">
+                    <span>
+                      <strong>Dark mode</strong>
+                      <small>Switch between light and dark display</small>
+                    </span>
+                    <button class="setting-action theme-toggle" type="button" data-theme-toggle aria-label="Turn on dark mode" aria-pressed="false">
+                      <i class="theme-icon theme-icon-moon" data-lucide="moon" aria-hidden="true"></i>
+                      <i class="theme-icon theme-icon-sun" data-lucide="sun" aria-hidden="true"></i>
+                      <span class="fallback-icon" aria-hidden="true">T</span>
+                    </button>
+                  </div>
+                  <div class="setting-row">
+                    <span>
+                      <strong>VIP updates</strong>
+                      <small>View recent member alerts</small>
+                    </span>
+                    <button class="setting-action" type="button" data-sheet-open="updates-sheet" aria-label="View VIP updates">
+                      <i data-lucide="bell" aria-hidden="true"></i>
+                      <span class="fallback-icon" aria-hidden="true">!</span>
+                    </button>
+                  </div>
+                  <label class="setting-row">
+                    <span>
+                      <strong>SMS alerts</strong>
+                      <small>Events and free merchandise</small>
+                    </span>
+                    <input type="checkbox" checked>
+                  </label>
+                  <label class="setting-row">
+                    <span>
+                      <strong>Email updates</strong>
+                      <small>Perks, events, and VIP news</small>
+                    </span>
+                    <input type="checkbox" checked>
+                  </label>
+                  <label class="setting-row">
+                    <span>
+                      <strong>Wallet auto-updates</strong>
+                      <small>Refresh card status and event pass</small>
+                    </span>
+                    <input type="checkbox" checked>
+                  </label>
+                </div>
+              </section>
 
               <button class="secondary-action full-width" type="button" data-save-profile>
                 <i data-lucide="settings" aria-hidden="true"></i>
