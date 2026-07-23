@@ -77,6 +77,28 @@ create index if not exists vip_requests_member_id
 create index if not exists vip_requests_status_created_at
   on public.vip_requests (status, created_at desc);
 
+create table if not exists public.vip_push_tokens (
+  id text primary key,
+  member_id text not null references public.vip_members(id) on delete cascade,
+  token text not null,
+  platform text not null default 'ios',
+  provider text not null default 'capacitor',
+  device text not null default '',
+  enabled boolean not null default true,
+  last_registered_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists vip_push_tokens_token_unique
+  on public.vip_push_tokens (token);
+
+create index if not exists vip_push_tokens_member_enabled
+  on public.vip_push_tokens (member_id, enabled);
+
+create index if not exists vip_push_tokens_platform_enabled
+  on public.vip_push_tokens (platform, enabled);
+
 create table if not exists public.vip_member_sessions (
   token text primary key,
   member_id text not null references public.vip_members(id) on delete cascade,
@@ -148,8 +170,14 @@ create trigger set_vip_events_updated_at
 before update on public.vip_events
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_vip_push_tokens_updated_at on public.vip_push_tokens;
+create trigger set_vip_push_tokens_updated_at
+before update on public.vip_push_tokens
+for each row execute function public.set_updated_at();
+
 alter table public.vip_members enable row level security;
 alter table public.vip_events enable row level security;
 alter table public.vip_requests enable row level security;
+alter table public.vip_push_tokens enable row level security;
 alter table public.vip_member_sessions enable row level security;
 alter table public.vip_admin_sessions enable row level security;

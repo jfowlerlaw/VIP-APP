@@ -30,6 +30,25 @@ npm run cap:open:ios
 
 Use `npm run cap:sync` any time the web app changes before building in Xcode. Use `npm run cap:open:ios` to open the generated app in Xcode for simulator, device, archive, and TestFlight work.
 
+## Push Notification Setup
+
+The member app has a guarded Profile setting for push notifications. In a regular browser it stays disabled. In the iPhone app it requests permission, receives the native device token, and saves that token to the beta server.
+
+Push setup has a few pieces:
+
+1. Install the Capacitor push plugin after npm has internet access:
+
+```sh
+npm install
+npm run cap:sync
+```
+
+2. In Xcode, open `ios/App`, select the App target, then enable **Signing & Capabilities > Push Notifications**.
+3. Run the latest `supabase/schema.sql` in Supabase so the `vip_push_tokens` table exists.
+4. Build to a real iPhone or TestFlight. Push permission and device-token registration cannot be fully tested in the desktop browser.
+
+This first pass stores iOS APNs tokens and future Android FCM tokens. Sending notifications from the admin portal is the next layer; that will need an Apple APNs key or a notification provider such as Firebase/OneSignal.
+
 ## Current Beta Flow
 
 - Members claim with email plus last name, receive a verification code, then can create a password in Profile.
@@ -40,6 +59,7 @@ Use `npm run cap:sync` any time the web app changes before building in Xcode. Us
 - Verification codes, password login, and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
 - Set `SENDGRID_API_KEY`, `VIP_FROM_EMAIL`, and `VIP_REQUEST_EMAIL` in `.env` to turn on automatic email delivery.
 - In Render, set `VIP_SHOW_CODES=false` once `SENDGRID_API_KEY` is configured so real testers receive emailed random codes instead of seeing the beta code on screen.
+- The iPhone app can register push-notification device tokens once the native plugin, Xcode capability, and `vip_push_tokens` Supabase table are set up.
 
 ## Supabase Database Setup
 

@@ -888,6 +888,15 @@ p {
   font-weight: 900;
 }
 
+.setting-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.push-row .text-setting-action {
+  min-width: 112px;
+}
+
 .logout-action {
   border-color: rgba(201, 31, 46, 0.34);
   color: var(--red);

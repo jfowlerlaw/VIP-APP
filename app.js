@@ -23,6 +23,9 @@ const memberLogoutButtons = document.querySelectorAll("[data-member-logout]");
 const eventsList = document.querySelector("[data-events-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
+const pushEnableButton = document.querySelector("[data-push-enable]");
+const pushStatus = document.querySelector("[data-push-status]");
+const pushLabel = document.querySelector("[data-push-label]");
 const themeToggles = document.querySelectorAll("[data-theme-toggle]");
 const themeControls = document.querySelectorAll("[data-theme-choice]");
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
@@ -31,6 +34,7 @@ const demoCode = "246810";
 const nativeApiBaseUrl = "https://vip-app-091y.onrender.com";
 const themeStorageKey = "jcm-vip-theme";
 const memberSessionStorageKey = "jcm-vip-session";
+const pushTokenStorageKey = "jcm-vip-push-token";
 const themeMedia = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 const demoMembers = [
   {
@@ -60,6 +64,7 @@ let pendingClaim = null;
 let activeMember = null;
 let betaApiReady = false;
 let toastTimer;
+let pushListenersAttached = false;
 
 function normalizeThemePreference(preference) {
   return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
@@ -166,6 +171,32 @@ function clearStoredMemberSession() {
   }
 }
 
+function getStoredPushToken() {
+  try {
+    return localStorage.getItem(pushTokenStorageKey) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function storePushToken(tokenValue) {
+  if (!tokenValue) return;
+
+  try {
+    localStorage.setItem(pushTokenStorageKey, tokenValue);
+  } catch (error) {
+    // Local storage can be unavailable in private browsing contexts.
+  }
+}
+
+function clearStoredPushToken() {
+  try {
+    localStorage.removeItem(pushTokenStorageKey);
+  } catch (error) {
+    // Local storage can be unavailable in private browsing contexts.
+  }
+}
+
 async function apiRequest(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -200,6 +231,239 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     toast.classList.remove("is-visible");
   }, 2600);
+}
+
+function getPushPlugin() {
+  return window.Capacitor?.Plugins?.PushNotifications || null;
+}
+
+function pushPlatform() {
+  return window.Capacitor?.getPlatform?.() || (isNativeShell() ? "ios" : "web");
+}
+
+function pushDeviceLabel() {
+  return [navigator.platform, navigator.userAgent]
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 160);
+}
+
+function updatePushSetting(state = "idle", message) {
+  if (!pushEnableButton || !pushStatus || !pushLabel) return;
+
+  const pushPlugin = getPushPlugin();
+  const nativeShell = isNativeShell();
+  const states = {
+    web: {
+      label: "iPhone",
+      copy: "Available once this is running as the iPhone app.",
+      disabled: true,
+      enabled: false,
+    },
+    missing: {
+      label: "Install",
+      copy: "Install and sync the push plugin before testing on iPhone.",
+      disabled: true,
+      enabled: false,
+    },
+    signedOut: {
+      label: "Enable",
+      copy: "Sign in before enabling event reminders.",
+      disabled: true,
+      enabled: false,
+    },
+    checking: {
+      label: "Checking",
+      copy: "Checking this device's notification status...",
+      disabled: true,
+      enabled: false,
+    },
+    registering: {
+      label: "Saving",
+      copy: "Waiting for the iPhone to finish notification setup...",
+      disabled: true,
+      enabled: false,
+    },
+    enabled: {
+      label: "On",
+      copy: "This device is registered for VIP notifications.",
+      disabled: false,
+      enabled: true,
+    },
+    denied: {
+      label: "Enable",
+      copy: "Notifications are off for this app in iPhone Settings.",
+      disabled: false,
+      enabled: false,
+    },
+    error: {
+      label: "Retry",
+      copy: "Notifications could not be enabled. Try again.",
+      disabled: false,
+      enabled: false,
+    },
+    idle: {
+      label: "Enable",
+      copy: "Turn on event reminders and VIP notices for this device.",
+      disabled: false,
+      enabled: false,
+    },
+  };
+
+  let nextState = state;
+  if (!nativeShell) nextState = "web";
+  else if (!pushPlugin) nextState = "missing";
+  else if (!activeMember) nextState = "signedOut";
+
+  const setting = states[nextState] || states.idle;
+  pushLabel.textContent = setting.label;
+  pushStatus.textContent = message || setting.copy;
+  pushEnableButton.disabled = setting.disabled;
+  pushEnableButton.dataset.pushEnabled = String(setting.enabled);
+  pushEnableButton.setAttribute("aria-pressed", String(setting.enabled));
+}
+
+function attachPushListeners() {
+  const pushPlugin = getPushPlugin();
+  if (!pushPlugin || pushListenersAttached) return;
+  pushListenersAttached = true;
+
+  pushPlugin.addListener("registration", async (token) => {
+    await savePushRegistration(token?.value);
+  });
+
+  pushPlugin.addListener("registrationError", (error) => {
+    updatePushSetting("error", error?.error || "The iPhone could not register for notifications.");
+    showToast("Push notifications could not be enabled.");
+  });
+
+  pushPlugin.addListener("pushNotificationReceived", (notification) => {
+    showToast(notification?.title || "New VIP notification received.");
+  });
+
+  pushPlugin.addListener("pushNotificationActionPerformed", (action) => {
+    const targetView = action?.notification?.data?.view;
+    if (targetView === "events") {
+      activateView("events", "Events");
+    }
+  });
+}
+
+async function refreshPushStatus() {
+  if (!pushEnableButton) return;
+  if (!isNativeShell() || !getPushPlugin() || !activeMember) {
+    updatePushSetting();
+    return;
+  }
+
+  if (!betaApiReady) {
+    updatePushSetting("error", "Connect to the VIP server before enabling notifications.");
+    return;
+  }
+
+  updatePushSetting("checking");
+  try {
+    const result = await apiRequest("/api/push/status");
+    updatePushSetting(result.enabled ? "enabled" : "idle");
+  } catch (error) {
+    updatePushSetting("error", error.message || "Notification status could not be checked.");
+  }
+}
+
+async function savePushRegistration(tokenValue) {
+  const cleanToken = String(tokenValue || "").trim();
+  if (!cleanToken || !activeMember || !betaApiReady) {
+    updatePushSetting("error", "The iPhone did not return a notification token.");
+    return;
+  }
+
+  try {
+    updatePushSetting("registering");
+    await apiRequest("/api/push/register", {
+      method: "POST",
+      body: JSON.stringify({
+        token: cleanToken,
+        platform: pushPlatform(),
+        provider: "capacitor",
+        device: pushDeviceLabel(),
+      }),
+    });
+    storePushToken(cleanToken);
+    updatePushSetting("enabled");
+    showToast("Push notifications enabled.");
+  } catch (error) {
+    if (error.status === 401) {
+      clearStoredMemberSession();
+    }
+    updatePushSetting("error", error.message || "Push notifications could not be saved.");
+    showToast(error.message || "Push notifications could not be enabled.");
+  }
+}
+
+async function enablePushNotifications() {
+  const pushPlugin = getPushPlugin();
+  if (!isNativeShell()) {
+    updatePushSetting("web");
+    showToast("Push notifications are only available in the iPhone app.");
+    return;
+  }
+  if (!pushPlugin) {
+    updatePushSetting("missing");
+    showToast("Install and sync the push plugin before testing notifications.");
+    return;
+  }
+  if (!activeMember || !betaApiReady) {
+    updatePushSetting();
+    showToast("Sign in before enabling notifications.");
+    return;
+  }
+
+  try {
+    attachPushListeners();
+    updatePushSetting("checking");
+    let permissions = await pushPlugin.checkPermissions();
+    if (permissions.receive === "prompt") {
+      permissions = await pushPlugin.requestPermissions();
+    }
+
+    if (permissions.receive !== "granted") {
+      updatePushSetting("denied");
+      showToast("Notifications are off for this app.");
+      return;
+    }
+
+    updatePushSetting("registering");
+    await pushPlugin.register();
+  } catch (error) {
+    updatePushSetting("error", error.message || "Push notifications could not be enabled.");
+    showToast(error.message || "Push notifications could not be enabled.");
+  }
+}
+
+async function disablePushNotifications({ silent = false } = {}) {
+  const pushPlugin = getPushPlugin();
+  const tokenValue = getStoredPushToken();
+
+  try {
+    pushEnableButton?.setAttribute("disabled", "");
+    if (pushPlugin?.unregister) {
+      await pushPlugin.unregister();
+    }
+    if (betaApiReady && activeMember) {
+      await apiRequest("/api/push/unregister", {
+        method: "POST",
+        body: JSON.stringify({ token: tokenValue }),
+      });
+    }
+    clearStoredPushToken();
+    updatePushSetting("idle");
+    if (!silent) showToast("Push notifications turned off.");
+  } catch (error) {
+    updatePushSetting("error", error.message || "Push notifications could not be turned off.");
+    if (!silent) showToast(error.message || "Push notifications could not be turned off.");
+  } finally {
+    pushEnableButton?.removeAttribute("disabled");
+  }
 }
 
 function firstNameForGreeting(member = activeMember) {
@@ -305,6 +569,7 @@ function applyMember(member) {
   if (document.querySelector("#view-card")?.classList.contains("is-active") && viewTitle) {
     viewTitle.textContent = cardScreenTitle(member);
   }
+  refreshPushStatus();
   showToast(
     member.hasPassword
       ? `Welcome back, ${displayName}.`
@@ -334,6 +599,7 @@ function resetMemberAuth() {
   });
 
   updatePasswordSetup(null);
+  updatePushSetting();
   setAuthMode("code");
   activateView("card", "Hi, VIP!");
 
@@ -858,6 +1124,15 @@ document.querySelectorAll(".setting-row input").forEach((input) => {
   });
 });
 
+pushEnableButton?.addEventListener("click", () => {
+  if (pushEnableButton.dataset.pushEnabled === "true") {
+    disablePushNotifications();
+    return;
+  }
+
+  enablePushNotifications();
+});
+
 if (cardNameInput) {
   cardNameInput.addEventListener("input", () => {
     updateMemberName(cardNameInput.value);
@@ -892,6 +1167,7 @@ memberLogoutButtons.forEach((button) => {
     button.setAttribute("disabled", "");
 
     try {
+      await disablePushNotifications({ silent: true });
       if (betaApiReady) {
         await apiRequest("/api/logout", { method: "POST" });
       }
@@ -934,5 +1210,6 @@ window.addEventListener("DOMContentLoaded", () => {
     window.lucide.createIcons();
     document.documentElement.classList.add("icons-ready");
   }
+  updatePushSetting();
   bootBetaApi();
 });

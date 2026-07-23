@@ -154,6 +154,7 @@ const seedDatabase = {
       createdAt: "2026-06-05T13:10:00.000Z",
     },
   ],
+  pushTokens: [],
 };
 
 const vipDb = createDatabase({ rootDir, seedDatabase });
@@ -392,6 +393,90 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (route === "GET /api/push/status") {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Not signed in" });
+      return;
+    }
+
+    const tokens = await vipDb.listPushTokens({ memberId: member.id, enabledOnly: true });
+    sendJson(res, 200, {
+      enabled: tokens.length > 0,
+      tokens: tokens.map(publicPushToken),
+    });
+    return;
+  }
+
+  if (route === "POST /api/push/register") {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Not signed in" });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const tokenValue = String(body.token || body.value || "").trim();
+    if (tokenValue.length < 10) {
+      sendJson(res, 400, { message: "Push token was not available yet." });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const pushToken = {
+      id: `push_${Date.now()}_${randomBytes(3).toString("hex")}`,
+      memberId: member.id,
+      token: tokenValue,
+      platform: normalizePushPlatform(body.platform),
+      provider: String(body.provider || "capacitor").trim().slice(0, 40) || "capacitor",
+      device: String(body.device || "").trim().slice(0, 160),
+      enabled: true,
+      lastRegisteredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    let storedToken;
+    try {
+      storedToken = await vipDb.upsertPushToken(pushToken);
+    } catch (error) {
+      if (/vip_push_tokens/i.test(error.message || "")) {
+        sendJson(res, 500, {
+          message: "Push notification storage is not set up yet. Run the latest Supabase schema SQL first.",
+        });
+        return;
+      }
+      throw error;
+    }
+
+    sendJson(res, 200, {
+      enabled: true,
+      token: publicPushToken(storedToken),
+    });
+    return;
+  }
+
+  if (route === "POST /api/push/unregister") {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Not signed in" });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const tokenValue = String(body.token || "").trim();
+    const deletedTokens = await vipDb.deletePushToken({
+      memberId: member.id,
+      token: tokenValue || undefined,
+    });
+
+    sendJson(res, 200, {
+      enabled: false,
+      deleted: deletedTokens.length,
+    });
+    return;
+  }
+
   if (route === "POST /api/requests") {
     const member = await requireMember(req);
     if (!member) {
@@ -623,6 +708,12 @@ async function handleAdminApi(req, res, url) {
 
   if (route === "GET /api/admin/requests") {
     sendJson(res, 200, { requests: await vipDb.listRequests() });
+    return;
+  }
+
+  if (route === "GET /api/admin/push-tokens") {
+    const tokens = await vipDb.listPushTokens({ enabledOnly: true });
+    sendJson(res, 200, { tokens: tokens.map(publicPushToken) });
     return;
   }
 
@@ -939,6 +1030,30 @@ function publicMember(member) {
     passwordSetAt: member.passwordSetAt || null,
     preferences: member.preferences || {},
   };
+}
+
+function publicPushToken(pushToken) {
+  const tokenValue = String(pushToken.token || "");
+  return {
+    id: pushToken.id,
+    memberId: pushToken.memberId,
+    tokenPreview:
+      tokenValue.length > 12 ? `${tokenValue.slice(0, 6)}...${tokenValue.slice(-6)}` : "registered",
+    platform: pushToken.platform,
+    provider: pushToken.provider,
+    device: pushToken.device,
+    enabled: pushToken.enabled !== false,
+    lastRegisteredAt: pushToken.lastRegisteredAt,
+    createdAt: pushToken.createdAt,
+  };
+}
+
+function normalizePushPlatform(platform) {
+  const cleanPlatform = String(platform || "").trim().toLowerCase();
+  if (cleanPlatform === "ios" || cleanPlatform === "android" || cleanPlatform === "web") {
+    return cleanPlatform;
+  }
+  return "ios";
 }
 
 function findMemberByEmail(members, email) {

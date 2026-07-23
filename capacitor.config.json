@@ -4,5 +4,10 @@
   "webDir": "dist/client",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "banner", "list"]
+    }
   }
 }

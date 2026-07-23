@@ -23,6 +23,9 @@ export function createDatabase({ rootDir, seedDatabase }) {
     listRequests,
     createRequest,
     updateRequestStatus,
+    listPushTokens,
+    upsertPushToken,
+    deletePushToken,
   };
 
   async function ensureDatabase() {
@@ -36,13 +39,14 @@ export function createDatabase({ rootDir, seedDatabase }) {
   async function readDb() {
     if (!supabase) return readLocalDb();
 
-    const [members, events, requests] = await Promise.all([
+    const [members, events, requests, pushTokens] = await Promise.all([
       listMembers(),
       listEvents(),
       listRequests(),
+      listPushTokens(),
     ]);
 
-    return { members, events, requests };
+    return { members, events, requests, pushTokens };
   }
 
   async function listMembers() {
@@ -131,6 +135,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
       const [deletedMember] = db.members.splice(memberIndex, 1);
       const originalRequestCount = db.requests.length;
       db.requests = db.requests.filter((request) => request.memberId !== id);
+      db.pushTokens = (db.pushTokens || []).filter((pushToken) => pushToken.memberId !== id);
       await writeLocalDb(db);
 
       return {
@@ -255,6 +260,84 @@ export function createDatabase({ rootDir, seedDatabase }) {
     return rows[0] ? requestFromRow(rows[0]) : null;
   }
 
+  async function listPushTokens({ memberId, enabledOnly = false } = {}) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      return (db.pushTokens || []).filter((pushToken) => {
+        const memberMatches = !memberId || pushToken.memberId === memberId;
+        const enabledMatches = !enabledOnly || pushToken.enabled !== false;
+        return memberMatches && enabledMatches;
+      });
+    }
+
+    const params = { select: "*", order: "updated_at.desc" };
+    if (memberId) params.member_id = `eq.${memberId}`;
+    if (enabledOnly) params.enabled = "eq.true";
+
+    const rows = await supabaseRequest("vip_push_tokens", {
+      query: queryString(params),
+    });
+    return rows.map(pushTokenFromRow);
+  }
+
+  async function upsertPushToken(pushToken) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      db.pushTokens ||= [];
+      const existing = db.pushTokens.find((item) => item.token === pushToken.token);
+      if (existing) {
+        Object.assign(existing, pushToken, {
+          id: existing.id,
+          createdAt: existing.createdAt || pushToken.createdAt,
+        });
+        await writeLocalDb(db);
+        return existing;
+      }
+
+      db.pushTokens.unshift(pushToken);
+      await writeLocalDb(db);
+      return pushToken;
+    }
+
+    const rows = await supabaseRequest("vip_push_tokens", {
+      method: "POST",
+      query: queryString({ on_conflict: "token" }),
+      body: pushTokenToRow(pushToken),
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+    });
+    return pushTokenFromRow(rows[0]);
+  }
+
+  async function deletePushToken({ memberId, token } = {}) {
+    if (!memberId && !token) return [];
+
+    if (!supabase) {
+      const db = await readLocalDb();
+      const pushTokens = db.pushTokens || [];
+      const deleted = [];
+      db.pushTokens = pushTokens.filter((pushToken) => {
+        const memberMatches = !memberId || pushToken.memberId === memberId;
+        const tokenMatches = !token || pushToken.token === token;
+        const shouldDelete = memberMatches && tokenMatches;
+        if (shouldDelete) deleted.push(pushToken);
+        return !shouldDelete;
+      });
+      await writeLocalDb(db);
+      return deleted;
+    }
+
+    const params = { select: "*" };
+    if (memberId) params.member_id = `eq.${memberId}`;
+    if (token) params.token = `eq.${token}`;
+
+    const rows = await supabaseRequest("vip_push_tokens", {
+      method: "DELETE",
+      query: queryString(params),
+      headers: { Prefer: "return=representation" },
+    });
+    return rows ? rows.map(pushTokenFromRow) : [];
+  }
+
   async function readLocalDb() {
     await ensureDatabase();
     const raw = await readFile(dbPath, "utf8");
@@ -265,6 +348,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
       members: stored.members || seedDatabase.members,
       events: stored.events || seedDatabase.events,
       requests: stored.requests || seedDatabase.requests,
+      pushTokens: stored.pushTokens || seedDatabase.pushTokens || [],
     };
   }
 
@@ -458,5 +542,35 @@ function requestToRow(request) {
     email_status: request.emailStatus,
     email_sent_at: request.emailSentAt,
     email_error: request.emailError,
+  };
+}
+
+function pushTokenFromRow(row) {
+  return {
+    id: row.id,
+    memberId: row.member_id,
+    token: row.token,
+    platform: row.platform || "ios",
+    provider: row.provider || "capacitor",
+    device: row.device || "",
+    enabled: row.enabled !== false,
+    lastRegisteredAt: row.last_registered_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function pushTokenToRow(pushToken) {
+  return {
+    id: pushToken.id,
+    member_id: pushToken.memberId,
+    token: pushToken.token,
+    platform: pushToken.platform || "ios",
+    provider: pushToken.provider || "capacitor",
+    device: pushToken.device || "",
+    enabled: pushToken.enabled !== false,
+    last_registered_at: pushToken.lastRegisteredAt,
+    created_at: pushToken.createdAt,
+    updated_at: pushToken.updatedAt,
   };
 }
