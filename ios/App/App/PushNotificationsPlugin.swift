@@ -222,10 +222,14 @@ public final class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, Notific
     }
 
     private func resolve(_ call: CAPPluginCall, _ data: [String: Any]? = nil) {
-        call.successHandler(CAPPluginCallResult(data), call)
+        if let data {
+            call.resolve(data)
+        } else {
+            call.resolve()
+        }
     }
 
     private func reject(_ call: CAPPluginCall, message: String, code: String? = nil) {
-        call.errorHandler(CAPPluginCallError(message: message, code: code, error: nil, data: nil))
+        call.reject(message, code)
     }
 }
