@@ -388,34 +388,10 @@
                       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
                     </div>
                   </div>
-                  <div class="setting-row">
-                    <span>
-                      <strong>VIP updates</strong>
-                      <small>View recent member alerts</small>
-                    </span>
-                    <button class="setting-action" type="button" data-sheet-open="updates-sheet" aria-label="View VIP updates">
-                      <i data-lucide="bell" aria-hidden="true"></i>
-                      <span class="fallback-icon" aria-hidden="true">!</span>
-                    </button>
-                  </div>
-                  <label class="setting-row">
-                    <span>
-                      <strong>SMS alerts</strong>
-                      <small>Events and free merchandise</small>
-                    </span>
-                    <input type="checkbox" checked>
-                  </label>
                   <label class="setting-row">
                     <span>
                       <strong>Email updates</strong>
                       <small>Perks, events, and VIP news</small>
-                    </span>
-                    <input type="checkbox" checked>
-                  </label>
-                  <label class="setting-row">
-                    <span>
-                      <strong>Wallet auto-updates</strong>
-                      <small>Refresh card status and event pass</small>
                     </span>
                     <input type="checkbox" checked>
                   </label>
@@ -500,35 +476,6 @@
         <a class="brief-link" href="mailto:vip@justcallmoe.com?subject=VIP%20portal%20help">Contact VIP Support</a>
       </aside>
     </main>
-
-    <section class="sheet" id="updates-sheet" aria-label="VIP updates" hidden>
-      <div class="sheet-panel">
-        <div class="sheet-header">
-          <div>
-            <p class="eyebrow">VIP Updates</p>
-            <h2>Latest from Just Call Moe</h2>
-          </div>
-          <button class="icon-button" type="button" data-sheet-close aria-label="Close updates">
-            <i data-lucide="x" aria-hidden="true"></i>
-            <span class="fallback-icon" aria-hidden="true">X</span>
-          </button>
-        </div>
-        <article class="update-item">
-          <i data-lucide="ticket" aria-hidden="true"></i>
-          <div>
-            <strong>New event invite</strong>
-            <p>VIP Restaurant Night is available through Eventbrite.</p>
-          </div>
-        </article>
-        <article class="update-item">
-          <i data-lucide="shirt" aria-hidden="true"></i>
-          <div>
-            <strong>Merch alert</strong>
-            <p>Free merchandise drop notifications are turned on.</p>
-          </div>
-        </article>
-      </div>
-    </section>
 
     <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   </body>
