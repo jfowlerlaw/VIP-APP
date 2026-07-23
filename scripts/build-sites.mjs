@@ -16,7 +16,6 @@ for (const file of ["index.html", "admin.html", "styles.css", "admin.css", "app.
 }
 
 await cp(join(rootDir, "assets"), join(clientDir, "assets"), { recursive: true });
-await cp(join(rootDir, "node_modules/@capacitor/core/dist/capacitor.js"), join(clientDir, "capacitor.js"));
 await cp(join(rootDir, "src/worker.mjs"), join(serverDir, "index.js"));
 await mkdir(join(distDir, ".openai"), { recursive: true });
 await cp(join(rootDir, ".openai/hosting.json"), join(distDir, ".openai/hosting.json"));
