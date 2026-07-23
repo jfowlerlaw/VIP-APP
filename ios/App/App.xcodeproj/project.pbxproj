@@ -16,6 +16,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		A74F8A2B4D91F6C100000001 /* AppViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74F8A2B4D91F6C100000000 /* AppViewController.swift */; };
+		A74F8A2B4D91F6C100000004 /* PushNotificationsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74F8A2B4D91F6C100000003 /* PushNotificationsPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,7 @@
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A74F8A2B4D91F6C100000002 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		A74F8A2B4D91F6C100000000 /* AppViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewController.swift; sourceTree = "<group>"; };
+		A74F8A2B4D91F6C100000003 /* PushNotificationsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationsPlugin.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -69,6 +71,7 @@
 				A74F8A2B4D91F6C100000002 /* App.entitlements */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				A74F8A2B4D91F6C100000000 /* AppViewController.swift */,
+				A74F8A2B4D91F6C100000003 /* PushNotificationsPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -168,6 +171,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				A74F8A2B4D91F6C100000001 /* AppViewController.swift in Sources */,
+				A74F8A2B4D91F6C100000004 /* PushNotificationsPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

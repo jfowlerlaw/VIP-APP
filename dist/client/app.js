@@ -268,8 +268,8 @@ function updatePushSetting(state = "idle", message) {
       enabled: false,
     },
     missing: {
-      label: "Install",
-      copy: "Install and sync the push plugin before testing on iPhone.",
+      label: "Rebuild",
+      copy: "Rebuild the iPhone app before testing notifications.",
       disabled: true,
       enabled: false,
     },
@@ -416,7 +416,7 @@ async function enablePushNotifications() {
   }
   if (!pushPlugin) {
     updatePushSetting("missing");
-    showToast("Install and sync the push plugin before testing notifications.");
+    showToast("Rebuild the iPhone app before testing notifications.");
     return;
   }
   if (!activeMember || !betaApiReady) {

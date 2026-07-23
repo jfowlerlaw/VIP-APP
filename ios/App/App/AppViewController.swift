@@ -155,6 +155,8 @@ private final class ThemedBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
 
+        bridge?.registerPluginInstance(PushNotificationsPlugin())
+
         guard let userContentController = webView?.configuration.userContentController else {
             return
         }
