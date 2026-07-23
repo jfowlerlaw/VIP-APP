@@ -71,7 +71,10 @@ public final class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, Notific
     @objc public override func requestPermissions(_ call: CAPPluginCall) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error {
-                self.reject(call, message: error.localizedDescription)
+                self.resolve(call, [
+                    "receive": VIPPushPermission.denied.rawValue,
+                    "error": error.localizedDescription,
+                ])
                 return
             }
 
@@ -105,15 +108,15 @@ public final class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, Notific
     }
 
     @objc public func createChannel(_ call: CAPPluginCall) {
-        reject(call, message: "Notification channels are not available on iOS.", code: "UNAVAILABLE")
+        resolve(call)
     }
 
     @objc public func listChannels(_ call: CAPPluginCall) {
-        reject(call, message: "Notification channels are not available on iOS.", code: "UNAVAILABLE")
+        resolve(call, ["channels": []])
     }
 
     @objc public func deleteChannel(_ call: CAPPluginCall) {
-        reject(call, message: "Notification channels are not available on iOS.", code: "UNAVAILABLE")
+        resolve(call)
     }
 
     public func willPresent(notification: UNNotification) -> UNNotificationPresentationOptions {
@@ -229,7 +232,4 @@ public final class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, Notific
         }
     }
 
-    private func reject(_ call: CAPPluginCall, message: String, code: String? = nil) {
-        call.reject(message, code)
-    }
 }
