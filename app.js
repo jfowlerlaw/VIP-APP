@@ -234,7 +234,14 @@ function showToast(message) {
 }
 
 function getPushPlugin() {
-  return window.Capacitor?.Plugins?.PushNotifications || null;
+  const capacitor = window.Capacitor;
+  if (!capacitor) return null;
+
+  if (!capacitor.Plugins?.PushNotifications && typeof capacitor.registerPlugin === "function") {
+    capacitor.registerPlugin("PushNotifications", {});
+  }
+
+  return capacitor.Plugins?.PushNotifications || null;
 }
 
 function pushPlatform() {
