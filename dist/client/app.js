@@ -202,6 +202,15 @@ function showToast(message) {
   }, 2600);
 }
 
+function firstNameForGreeting(member = activeMember) {
+  const preferredName = String(member?.firstName || member?.cardName || member?.name || "").trim();
+  return preferredName.split(/\s+/).filter(Boolean).at(0) || "VIP";
+}
+
+function cardScreenTitle(member = activeMember) {
+  return `Hi, ${firstNameForGreeting(member)}!`;
+}
+
 function activateView(target, title) {
   views.forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${target}`);
@@ -215,7 +224,7 @@ function activateView(target, title) {
   });
 
   if (viewTitle) {
-    viewTitle.textContent = title;
+    viewTitle.textContent = target === "card" ? cardScreenTitle() : title;
   }
 }
 
@@ -283,10 +292,6 @@ function applyMember(member) {
     }
   });
 
-  document.querySelectorAll("[data-member-id]").forEach((item) => {
-    item.textContent = member.memberId;
-  });
-
   document.querySelectorAll("[data-member-since]").forEach((item) => {
     item.textContent = `Member since ${member.joined}`;
   });
@@ -297,6 +302,9 @@ function applyMember(member) {
 
   appScreen?.classList.add("is-authenticated");
   document.querySelector("[data-auth-screen]")?.setAttribute("hidden", "");
+  if (document.querySelector("#view-card")?.classList.contains("is-active") && viewTitle) {
+    viewTitle.textContent = cardScreenTitle(member);
+  }
   showToast(
     member.hasPassword
       ? `Welcome back, ${displayName}.`
@@ -327,7 +335,7 @@ function resetMemberAuth() {
 
   updatePasswordSetup(null);
   setAuthMode("code");
-  activateView("card", "Your VIP Card");
+  activateView("card", "Hi, VIP!");
 
   if (claimMessage) {
     claimMessage.textContent = "Use the email address connected to your VIP membership.";

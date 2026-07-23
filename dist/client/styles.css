@@ -384,6 +384,7 @@ p {
 .vip-graphic-card {
   width: 100%;
   margin: 0;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -394,7 +395,7 @@ p {
   position: relative;
   aspect-ratio: 1.78 / 1;
   overflow: hidden;
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius);
   background: var(--card-art-bg);
 }
 
@@ -430,36 +431,6 @@ p {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.vip-graphic-card figcaption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 15px;
-}
-
-.pass-label {
-  margin-bottom: 2px;
-  color: var(--red);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.vip-graphic-card h2 {
-  margin-bottom: 2px;
-  color: var(--ink);
-  font-size: 1.04rem;
-}
-
-.member-id {
-  flex: 0 0 auto;
-  margin-bottom: 0;
-  color: var(--soft-ink);
-  font-size: 0.83rem;
-  font-weight: 800;
 }
 
 .primary-action,
@@ -1340,10 +1311,6 @@ p {
     padding-right: calc(8px + var(--safe-right));
     padding-bottom: calc(10px + var(--native-bottom-space));
     padding-left: calc(8px + var(--safe-left));
-  }
-
-  .vip-graphic-card figcaption {
-    padding: 12px 14px;
   }
 
   .quick-actions {
