@@ -217,6 +217,16 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (route === "POST /api/logout") {
+    const sessionToken = memberSessionTokenFromRequest(req);
+    if (sessionToken) {
+      memberSessions.delete(sessionToken);
+    }
+    clearCookie(res, "vip_session");
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (route === "POST /api/claim/start") {
     const body = await readJsonBody(req);
     const identity = String(body.identity || "");

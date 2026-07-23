@@ -19,6 +19,7 @@ const passwordTitle = document.querySelector("[data-password-title]");
 const passwordCopy = document.querySelector("[data-password-copy]");
 const passwordSubmitLabel = document.querySelector("[data-password-submit-label]");
 const authModeButtons = document.querySelectorAll("[data-auth-mode]");
+const memberLogoutButtons = document.querySelectorAll("[data-member-logout]");
 const eventsList = document.querySelector("[data-events-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
@@ -301,6 +302,42 @@ function applyMember(member) {
       ? `Welcome back, ${displayName}.`
       : "Welcome back. Add a password in Profile to skip codes next time."
   );
+}
+
+function resetMemberAuth() {
+  activeMember = null;
+  pendingMember = null;
+  pendingClaim = null;
+  clearStoredMemberSession();
+
+  appScreen?.classList.remove("is-authenticated");
+  document.querySelector("[data-auth-screen]")?.removeAttribute("hidden");
+  claimForm?.reset();
+  passwordLoginForm?.reset();
+  codeForm?.reset();
+  passwordSetupForm?.reset();
+  conciergeForms.forEach((form) => {
+    form.reset();
+    const statusMessage = form.querySelector("[data-request-status]");
+    if (statusMessage) {
+      statusMessage.textContent =
+        "Emergency, medical, and urgent legal matters should use direct phone support or emergency services.";
+    }
+  });
+
+  updatePasswordSetup(null);
+  setAuthMode("code");
+  activateView("card", "Your VIP Card");
+
+  if (claimMessage) {
+    claimMessage.textContent = "Use the email address connected to your VIP membership.";
+  }
+  if (codeMessage) {
+    codeMessage.textContent = "";
+  }
+  if (passwordLoginMessage) {
+    passwordLoginMessage.textContent = "Use this after you create a password in your VIP profile.";
+  }
 }
 
 function updatePasswordSetup(member) {
@@ -839,6 +876,24 @@ document.querySelectorAll("[data-save-profile]").forEach((button) => {
     }
 
     showToast("Profile saved.");
+  });
+});
+
+memberLogoutButtons.forEach((button) => {
+  button.addEventListener("click", async () => {
+    button.setAttribute("disabled", "");
+
+    try {
+      if (betaApiReady) {
+        await apiRequest("/api/logout", { method: "POST" });
+      }
+    } catch (error) {
+      // Logout should still clear this device even if the server session is already gone.
+    } finally {
+      resetMemberAuth();
+      button.removeAttribute("disabled");
+      showToast("Signed out.");
+    }
   });
 });
 

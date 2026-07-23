@@ -115,6 +115,13 @@ async function handleApi(request, env, url) {
     const member = await requireMember(request, env);
     return member ? json({ member: publicMember(member) }) : json({ message: "Not signed in" }, 401);
   }
+  if (route === "POST /api/logout") {
+    const sessionToken = memberSessionTokenFromRequest(request);
+    if (sessionToken) {
+      memberSessions.delete(sessionToken);
+    }
+    return json({ ok: true }, 200, [clearCookie("vip_session")]);
+  }
   if (route === "POST /api/claim/start") {
     const body = await readJsonBody(request);
     const db = await readDb(env);
