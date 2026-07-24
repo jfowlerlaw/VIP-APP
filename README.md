@@ -92,6 +92,8 @@ Keep `SUPABASE_SECRET_KEY` server-side only. Do not paste it into browser code, 
 
 For Render, add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` as environment variables on the web service. They are listed in `render.yaml` as `sync: false` so the real values stay out of GitHub.
 
+For existing Supabase projects that only need the new perks table, run `supabase/add_vip_perks.sql` in the SQL Editor.
+
 To import the existing VIP Google Sheet, export the sheet as CSV and upload it from the admin dashboard import panel. The most important columns are:
 
 - `first_name`
