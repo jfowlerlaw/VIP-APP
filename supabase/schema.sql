@@ -57,6 +57,74 @@ create table if not exists public.vip_events (
 create index if not exists vip_events_visible_created_at
   on public.vip_events (visible, created_at desc);
 
+create table if not exists public.vip_perks (
+  id text primary key,
+  title text not null,
+  description text not null default '',
+  note text not null default '',
+  icon text not null default 'star',
+  accent text not null default 'red',
+  button_label text not null default 'View',
+  action_url text not null default '',
+  action_message text not null default '',
+  visible boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists vip_perks_visible_created_at
+  on public.vip_perks (visible, created_at desc);
+
+insert into public.vip_perks (
+  id,
+  title,
+  description,
+  note,
+  icon,
+  accent,
+  button_label,
+  action_url,
+  action_message,
+  visible
+) values
+  (
+    'perk_private_group',
+    'Private group',
+    'Access the members-only Just Call Moe VIP Facebook community.',
+    'Members-only access',
+    'users',
+    'green',
+    'Join',
+    'https://www.facebook.com/share/g/1B5JVZj46a/',
+    '',
+    true
+  ),
+  (
+    'perk_shop_discount',
+    'Shop discount',
+    'Use code MOEVIP for merchandise at Shop.JustCallMoe.com.',
+    'Available now',
+    'badge-percent',
+    'red',
+    'Copy',
+    '',
+    'VIP shop code copied: MOEVIP',
+    true
+  ),
+  (
+    'perk_merch_alerts',
+    'Free merch alerts',
+    'Be first to hear when new VIP merchandise drops.',
+    'SMS and email eligible',
+    'megaphone',
+    'blue',
+    'On',
+    '',
+    'Merch alerts enabled.',
+    true
+  )
+on conflict (id) do nothing;
+
 create table if not exists public.vip_requests (
   id text primary key,
   member_id text references public.vip_members(id) on delete cascade,
@@ -170,6 +238,11 @@ create trigger set_vip_events_updated_at
 before update on public.vip_events
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_vip_perks_updated_at on public.vip_perks;
+create trigger set_vip_perks_updated_at
+before update on public.vip_perks
+for each row execute function public.set_updated_at();
+
 drop trigger if exists set_vip_push_tokens_updated_at on public.vip_push_tokens;
 create trigger set_vip_push_tokens_updated_at
 before update on public.vip_push_tokens
@@ -177,6 +250,7 @@ for each row execute function public.set_updated_at();
 
 alter table public.vip_members enable row level security;
 alter table public.vip_events enable row level security;
+alter table public.vip_perks enable row level security;
 alter table public.vip_requests enable row level security;
 alter table public.vip_push_tokens enable row level security;
 alter table public.vip_member_sessions enable row level security;

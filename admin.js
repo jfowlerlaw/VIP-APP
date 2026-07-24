@@ -10,6 +10,9 @@ const importPreview = document.querySelector("[data-import-preview]");
 const importCount = document.querySelector("[data-import-count]");
 const runImportButton = document.querySelector("[data-run-import]");
 const requestBoard = document.querySelector("[data-request-board]");
+const perkList = document.querySelector("[data-perk-list]");
+const perkForm = document.querySelector("[data-perk-form]");
+const perkFormMode = document.querySelector("[data-perk-form-mode]");
 const pushConfigPill = document.querySelector("[data-push-config-pill]");
 const pushEnv = document.querySelector("[data-push-env]");
 const pushBundle = document.querySelector("[data-push-bundle]");
@@ -362,6 +365,124 @@ function renderEvents(events) {
   });
 }
 
+function renderPerks(perks) {
+  if (!perkList || !Array.isArray(perks)) return;
+  perkList.innerHTML = "";
+
+  if (perks.length === 0) {
+    perkList.innerHTML = "<p>No perks have been added yet.</p>";
+    return;
+  }
+
+  perks.forEach((perk) => {
+    const article = document.createElement("article");
+    article.className = `accent-${perk.accent || "red"}`;
+    article.dataset.perkId = perk.id || "";
+    article.innerHTML = `
+      <i data-lucide="${escapeHtml(perk.icon || "star")}" aria-hidden="true"></i>
+      <div>
+        <strong>${escapeHtml(perk.title || "VIP Perk")}</strong>
+        <p>${escapeHtml(perk.description || "VIP member perk.")}</p>
+        <small>${escapeHtml([perk.note, perk.buttonLabel, perk.actionUrl ? "link" : "message"].filter(Boolean).join(" · "))}</small>
+      </div>
+      <div class="row-actions">
+        <button type="button" data-edit-perk="${escapeHtml(perk.id || "")}">Edit</button>
+        <button type="button" data-toggle-perk="${escapeHtml(perk.id || "")}">
+          ${perk.visible === false ? "Hidden" : "Visible"}
+        </button>
+        <button class="danger-button" type="button" data-delete-perk="${escapeHtml(perk.id || "")}">
+          Delete
+        </button>
+      </div>
+    `;
+    article.dataset.perk = JSON.stringify(perk);
+    article.querySelector("[data-edit-perk]").addEventListener("click", () => editPerk(perk));
+    article.querySelector("[data-toggle-perk]").addEventListener("click", () => togglePerk(perk));
+    article.querySelector("[data-delete-perk]").addEventListener("click", () => deletePerk(perk));
+    perkList.append(article);
+  });
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function resetPerkForm() {
+  if (!perkForm) return;
+  perkForm.reset();
+  perkForm.elements.perkId.value = "";
+  perkForm.elements.title.value = "Private group";
+  perkForm.elements.description.value = "Access the members-only Just Call Moe VIP Facebook community.";
+  perkForm.elements.note.value = "Members-only access";
+  perkForm.elements.buttonLabel.value = "Join";
+  perkForm.elements.icon.value = "users";
+  perkForm.elements.accent.value = "green";
+  perkForm.elements.actionUrl.value = "https://www.facebook.com/share/g/1B5JVZj46a/";
+  perkForm.elements.actionMessage.value = "";
+  perkForm.elements.visible.checked = true;
+  if (perkFormMode) perkFormMode.textContent = "Add Perk";
+}
+
+function editPerk(perk) {
+  if (!perkForm) return;
+  perkForm.elements.perkId.value = perk.id || "";
+  perkForm.elements.title.value = perk.title || "";
+  perkForm.elements.description.value = perk.description || "";
+  perkForm.elements.note.value = perk.note || "";
+  perkForm.elements.buttonLabel.value = perk.buttonLabel || "View";
+  perkForm.elements.icon.value = perk.icon || "star";
+  perkForm.elements.accent.value = perk.accent || "red";
+  perkForm.elements.actionUrl.value = perk.actionUrl || "";
+  perkForm.elements.actionMessage.value = perk.actionMessage || "";
+  perkForm.elements.visible.checked = perk.visible !== false;
+  if (perkFormMode) perkFormMode.textContent = "Edit Perk";
+  perkForm.querySelector("input[name='title']")?.focus();
+}
+
+function perkPayloadFromForm(form) {
+  const data = new FormData(form);
+  return {
+    title: String(data.get("title") || ""),
+    description: String(data.get("description") || ""),
+    note: String(data.get("note") || ""),
+    icon: String(data.get("icon") || "star"),
+    accent: String(data.get("accent") || "red"),
+    buttonLabel: String(data.get("buttonLabel") || "View"),
+    actionUrl: String(data.get("actionUrl") || ""),
+    actionMessage: String(data.get("actionMessage") || ""),
+    visible: data.get("visible") === "on",
+  };
+}
+
+async function togglePerk(perk) {
+  if (!adminApiReady || !perk.id) return;
+  try {
+    const result = await apiRequest(`/api/admin/perks/${encodeURIComponent(perk.id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ visible: perk.visible === false }),
+    });
+    renderPerks(result.perks);
+    showToast(`${perk.title || "Perk"} ${perk.visible === false ? "shown" : "hidden"}.`);
+  } catch (error) {
+    showToast(error.message || "Perk visibility could not be saved.");
+  }
+}
+
+async function deletePerk(perk) {
+  if (!adminApiReady || !perk.id) return;
+  const confirmed = window.confirm(`Delete ${perk.title || "this perk"} from the member app?`);
+  if (!confirmed) return;
+
+  try {
+    const result = await apiRequest(`/api/admin/perks/${encodeURIComponent(perk.id)}`, {
+      method: "DELETE",
+    });
+    renderPerks(result.perks);
+    resetPerkForm();
+    showToast("Perk deleted.");
+  } catch (error) {
+    showToast(error.message || "Perk could not be deleted.");
+  }
+}
+
 async function deleteMember(row) {
   const memberId = row.dataset.memberId;
   const memberName = row.dataset.memberName || row.querySelector("strong")?.textContent || "this VIP";
@@ -664,14 +785,16 @@ async function loadAdminData() {
     adminApiReady = true;
     renderSummary(summary.summary);
 
-    const [members, events, requests, push] = await Promise.all([
+    const [members, events, perks, requests, push] = await Promise.all([
       apiRequest("/api/admin/members"),
       apiRequest("/api/admin/events"),
+      apiRequest("/api/admin/perks"),
       apiRequest("/api/admin/requests"),
       apiRequest("/api/admin/push/status"),
     ]);
     renderMembers(members.members);
     renderEvents(events.events);
+    renderPerks(perks.perks);
     renderRequests(requests.requests);
     renderPushAdmin(push);
   } catch (error) {
@@ -884,6 +1007,33 @@ runImportButton?.addEventListener("click", async () => {
   if (metric) metric.textContent = String(Number(metric.textContent) + previewRecords.length);
   showToast(`${previewRecords.length} VIP records imported.`);
   activateSection("members");
+});
+
+perkForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = perkPayloadFromForm(form);
+  if (!payload.title.trim()) {
+    showToast("Perk title is required.");
+    return;
+  }
+
+  const perkId = String(new FormData(form).get("perkId") || "");
+  try {
+    const result = await apiRequest(perkId ? `/api/admin/perks/${encodeURIComponent(perkId)}` : "/api/admin/perks", {
+      method: perkId ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    });
+    renderPerks(result.perks);
+    resetPerkForm();
+    showToast(perkId ? "Perk updated." : "Perk added.");
+  } catch (error) {
+    showToast(error.message || "Perk could not be saved.");
+  }
+});
+
+document.querySelector("[data-perk-reset]")?.addEventListener("click", () => {
+  resetPerkForm();
 });
 
 document.querySelector("[data-event-form]")?.addEventListener("submit", async (event) => {

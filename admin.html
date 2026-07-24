@@ -410,23 +410,86 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                 </div>
               </div>
               <div class="perk-list" data-perk-list>
-                <article>
-                  <i data-lucide="badge-percent" aria-hidden="true"></i>
-                  <div>
-                    <strong>Shop discount</strong>
-                    <p>Code MOEVIP · visible</p>
-                  </div>
-                  <button type="button" data-toggle-row>Visible</button>
-                </article>
-                <article>
-                  <i data-lucide="users" aria-hidden="true"></i>
-                  <div>
-                    <strong>Private group</strong>
-                    <p>Facebook community · members only</p>
-                  </div>
-                  <button type="button" data-toggle-row>Visible</button>
-                </article>
+                <p>No perks have been loaded yet.</p>
               </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow" data-perk-form-mode>Add Perk</p>
+                  <h2>Perk Details</h2>
+                </div>
+              </div>
+              <form class="stack-form" data-perk-form>
+                <input type="hidden" name="perkId">
+                <label>
+                  Title
+                  <input name="title" value="Private group">
+                </label>
+                <label>
+                  Description
+                  <textarea name="description" rows="3">Access the members-only Just Call Moe VIP Facebook community.</textarea>
+                </label>
+                <div class="two-col">
+                  <label>
+                    Note
+                    <input name="note" value="Members-only access">
+                  </label>
+                  <label>
+                    Button label
+                    <input name="buttonLabel" value="Join">
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>
+                    Icon
+                    <select name="icon">
+                      <option value="badge-percent">Discount</option>
+                      <option value="bell">Bell</option>
+                      <option value="calendar-days">Calendar</option>
+                      <option value="crown">Crown</option>
+                      <option value="gift">Gift</option>
+                      <option value="heart-handshake">Handshake</option>
+                      <option value="megaphone">Megaphone</option>
+                      <option value="sparkles">Sparkles</option>
+                      <option value="star">Star</option>
+                      <option value="ticket">Ticket</option>
+                      <option value="users" selected>Group</option>
+                    </select>
+                  </label>
+                  <label>
+                    Accent
+                    <select name="accent">
+                      <option value="red">Red</option>
+                      <option value="blue">Blue</option>
+                      <option value="green" selected>Green</option>
+                      <option value="yellow">Yellow</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Action URL
+                  <input name="actionUrl" value="https://www.facebook.com/share/g/1B5JVZj46a/">
+                </label>
+                <label>
+                  Button message
+                  <input name="actionMessage" placeholder="Shown when there is no URL">
+                </label>
+                <label class="inline-check">
+                  <input name="visible" type="checkbox" checked>
+                  Visible in member app
+                </label>
+                <div class="button-row">
+                  <button class="primary-button" type="submit" data-perk-submit>
+                    <i data-lucide="save" aria-hidden="true"></i>
+                    Save Perk
+                  </button>
+                  <button class="ghost-button" type="button" data-perk-reset>
+                    Clear
+                  </button>
+                </div>
+              </form>
             </section>
           </div>
         </section>

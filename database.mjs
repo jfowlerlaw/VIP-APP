@@ -20,6 +20,10 @@ export function createDatabase({ rootDir, seedDatabase }) {
     listEvents,
     createEvent,
     deleteEvent,
+    listPerks,
+    createPerk,
+    updatePerk,
+    deletePerk,
     listRequests,
     createRequest,
     updateRequestStatus,
@@ -39,14 +43,15 @@ export function createDatabase({ rootDir, seedDatabase }) {
   async function readDb() {
     if (!supabase) return readLocalDb();
 
-    const [members, events, requests, pushTokens] = await Promise.all([
+    const [members, events, perks, requests, pushTokens] = await Promise.all([
       listMembers(),
       listEvents(),
+      listPerks(),
       listRequests(),
       listPushTokens(),
     ]);
 
-    return { members, events, requests, pushTokens };
+    return { members, events, perks, requests, pushTokens };
   }
 
   async function listMembers() {
@@ -213,6 +218,84 @@ export function createDatabase({ rootDir, seedDatabase }) {
     return rows[0] ? eventFromRow(rows[0]) : null;
   }
 
+  async function listPerks({ visibleOnly = false } = {}) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      const perks = db.perks || [];
+      return visibleOnly ? perks.filter((perk) => perk.visible !== false) : perks;
+    }
+
+    const query = visibleOnly
+      ? queryString({ select: "*", visible: "eq.true", order: "created_at.desc" })
+      : queryString({ select: "*", order: "created_at.desc" });
+    try {
+      const rows = await supabaseRequest("vip_perks", { query });
+      return rows.map(perkFromRow);
+    } catch (error) {
+      if (/vip_perks/i.test(error.message || "")) {
+        const perks = seedDatabase.perks || [];
+        return visibleOnly ? perks.filter((perk) => perk.visible !== false) : perks;
+      }
+      throw error;
+    }
+  }
+
+  async function createPerk(perk) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      db.perks ||= [];
+      db.perks.unshift(perk);
+      await writeLocalDb(db);
+      return perk;
+    }
+
+    const rows = await supabaseRequest("vip_perks", {
+      method: "POST",
+      body: perkToRow(perk),
+      headers: { Prefer: "return=representation" },
+    });
+    return perkFromRow(rows[0]);
+  }
+
+  async function updatePerk(id, patch) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      const perk = (db.perks || []).find((item) => item.id === id);
+      if (!perk) return null;
+      Object.assign(perk, patch);
+      await writeLocalDb(db);
+      return perk;
+    }
+
+    const rows = await supabaseRequest("vip_perks", {
+      method: "PATCH",
+      query: queryString({ select: "*", id: `eq.${id}` }),
+      body: perkPatchToRow(patch),
+      headers: { Prefer: "return=representation" },
+    });
+    return rows[0] ? perkFromRow(rows[0]) : null;
+  }
+
+  async function deletePerk(id) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      const perks = db.perks || [];
+      const perkIndex = perks.findIndex((perk) => perk.id === id);
+      if (perkIndex === -1) return null;
+      const [deletedPerk] = perks.splice(perkIndex, 1);
+      db.perks = perks;
+      await writeLocalDb(db);
+      return deletedPerk;
+    }
+
+    const rows = await supabaseRequest("vip_perks", {
+      method: "DELETE",
+      query: queryString({ select: "*", id: `eq.${id}` }),
+      headers: { Prefer: "return=representation" },
+    });
+    return rows[0] ? perkFromRow(rows[0]) : null;
+  }
+
   async function listRequests() {
     if (!supabase) {
       const db = await readLocalDb();
@@ -349,6 +432,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
       ...stored,
       members: stored.members || seedDatabase.members,
       events: stored.events || seedDatabase.events,
+      perks: stored.perks || seedDatabase.perks || [],
       requests: stored.requests || seedDatabase.requests,
       pushTokens: stored.pushTokens || seedDatabase.pushTokens || [],
     };
@@ -513,6 +597,52 @@ function eventToRow(event) {
     image: event.image,
     visible: event.visible !== false,
   };
+}
+
+function perkFromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    note: row.note,
+    icon: row.icon,
+    accent: row.accent,
+    buttonLabel: row.button_label,
+    actionUrl: row.action_url,
+    actionMessage: row.action_message,
+    visible: row.visible,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function perkToRow(perk) {
+  return {
+    id: perk.id,
+    title: perk.title,
+    description: perk.description || "",
+    note: perk.note || "",
+    icon: perk.icon || "star",
+    accent: perk.accent || "red",
+    button_label: perk.buttonLabel || "View",
+    action_url: perk.actionUrl || "",
+    action_message: perk.actionMessage || "",
+    visible: perk.visible !== false,
+  };
+}
+
+function perkPatchToRow(patch) {
+  const row = {};
+  if ("title" in patch) row.title = patch.title;
+  if ("description" in patch) row.description = patch.description;
+  if ("note" in patch) row.note = patch.note;
+  if ("icon" in patch) row.icon = patch.icon;
+  if ("accent" in patch) row.accent = patch.accent;
+  if ("buttonLabel" in patch) row.button_label = patch.buttonLabel;
+  if ("actionUrl" in patch) row.action_url = patch.actionUrl;
+  if ("actionMessage" in patch) row.action_message = patch.actionMessage;
+  if ("visible" in patch) row.visible = patch.visible;
+  return row;
 }
 
 function requestFromRow(row) {

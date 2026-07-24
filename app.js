@@ -21,6 +21,7 @@ const passwordSubmitLabel = document.querySelector("[data-password-submit-label]
 const authModeButtons = document.querySelectorAll("[data-auth-mode]");
 const memberLogoutButtons = document.querySelectorAll("[data-member-logout]");
 const eventsList = document.querySelector("[data-events-list]");
+const perksList = document.querySelector("[data-perks-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
 const pushEnableButton = document.querySelector("[data-push-enable]");
@@ -779,6 +780,77 @@ function renderEvents(events) {
   updateNextInvite(orderedEvents);
 }
 
+function renderPerks(perks) {
+  if (!perksList || !Array.isArray(perks)) return;
+  perksList.innerHTML = "";
+
+  if (perks.length === 0) {
+    const emptyState = document.createElement("article");
+    emptyState.className = "perk-card";
+    emptyState.innerHTML = `
+      <div class="perk-icon">
+        <i data-lucide="sparkles" aria-hidden="true"></i>
+        <span class="fallback-icon" aria-hidden="true">V</span>
+      </div>
+      <div>
+        <h2>No perks published</h2>
+        <p>New VIP perks will appear here.</p>
+        <small>Check back soon</small>
+      </div>
+    `;
+    perksList.append(emptyState);
+    if (window.lucide) window.lucide.createIcons();
+    return;
+  }
+
+  perks.forEach((perk) => {
+    const article = document.createElement("article");
+    article.className = `perk-card accent-${perk.accent || "red"}`;
+
+    const icon = document.createElement("div");
+    icon.className = "perk-icon";
+    const iconElement = document.createElement("i");
+    iconElement.setAttribute("data-lucide", perk.icon || "star");
+    iconElement.setAttribute("aria-hidden", "true");
+    const fallbackIcon = document.createElement("span");
+    fallbackIcon.className = "fallback-icon";
+    fallbackIcon.setAttribute("aria-hidden", "true");
+    fallbackIcon.textContent = String(perk.title || "V").trim().at(0) || "V";
+    icon.append(iconElement, fallbackIcon);
+
+    const copy = document.createElement("div");
+    const title = document.createElement("h2");
+    title.textContent = perk.title || "VIP Perk";
+    const description = document.createElement("p");
+    description.textContent = perk.description || "VIP member perk.";
+    const note = document.createElement("small");
+    note.textContent = perk.note || "Available now";
+    copy.append(title, description, note);
+
+    const label = perk.buttonLabel || "View";
+    if (perk.actionUrl) {
+      const link = document.createElement("a");
+      link.href = perk.actionUrl;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = label;
+      article.append(icon, copy, link);
+    } else {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.addEventListener("click", () => {
+        showToast(perk.actionMessage || `${perk.title || "VIP perk"} selected.`);
+      });
+      article.append(icon, copy, button);
+    }
+
+    perksList.append(article);
+  });
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
 navItems.forEach((item) => {
   item.addEventListener("click", () => {
     activateView(item.dataset.viewTarget, item.dataset.title);
@@ -1195,6 +1267,9 @@ async function bootBetaApi() {
 
     const events = await apiRequest("/api/events");
     renderEvents(events.events);
+
+    const perks = await apiRequest("/api/perks");
+    renderPerks(perks.perks);
 
     try {
       const session = await apiRequest("/api/me");

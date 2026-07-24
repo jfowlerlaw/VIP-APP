@@ -138,6 +138,44 @@ const seedDatabase = {
       visible: true,
     },
   ],
+  perks: [
+    {
+      id: "perk_shop_discount",
+      title: "Shop discount",
+      description: "Use code MOEVIP for merchandise at Shop.JustCallMoe.com.",
+      note: "Available now",
+      icon: "badge-percent",
+      accent: "red",
+      buttonLabel: "Copy",
+      actionUrl: "",
+      actionMessage: "VIP shop code copied: MOEVIP",
+      visible: true,
+    },
+    {
+      id: "perk_merch_alerts",
+      title: "Free merch alerts",
+      description: "Be first to hear when new VIP merchandise drops.",
+      note: "SMS and email eligible",
+      icon: "megaphone",
+      accent: "blue",
+      buttonLabel: "On",
+      actionUrl: "",
+      actionMessage: "Merch alerts enabled.",
+      visible: true,
+    },
+    {
+      id: "perk_private_group",
+      title: "Private group",
+      description: "Access the members-only Just Call Moe VIP Facebook community.",
+      note: "Members-only access",
+      icon: "users",
+      accent: "green",
+      buttonLabel: "Join",
+      actionUrl: "https://www.facebook.com/share/g/1B5JVZj46a/",
+      actionMessage: "",
+      visible: true,
+    },
+  ],
   requests: [
     {
       id: "req_avery_event_help",
@@ -211,6 +249,12 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       events: await vipDb.listEvents({ visibleOnly: true }),
     });
+    return;
+  }
+
+  if (route === "GET /api/perks") {
+    const perks = await vipDb.listPerks({ visibleOnly: true });
+    sendJson(res, 200, { perks: perks.map(publicPerk) });
     return;
   }
 
@@ -707,6 +751,59 @@ async function handleAdminApi(req, res, url) {
     sendJson(res, 200, {
       deletedEvent,
       events: db.events,
+      summary: buildSummary(db),
+    });
+    return;
+  }
+
+  if (route === "GET /api/admin/perks") {
+    const perks = await vipDb.listPerks();
+    sendJson(res, 200, { perks: perks.map(publicPerk) });
+    return;
+  }
+
+  if (route === "POST /api/admin/perks") {
+    const body = await readJsonBody(req);
+    const perk = await vipDb.createPerk(normalizePerkRecord(body));
+    const db = await vipDb.readDb();
+    sendJson(res, 201, {
+      perk: publicPerk(perk),
+      perks: (db.perks || []).map(publicPerk),
+      summary: buildSummary(db),
+    });
+    return;
+  }
+
+  if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/perks/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/admin/perks/", ""));
+    const body = await readJsonBody(req);
+    const perk = await vipDb.updatePerk(id, normalizePerkPatch(body));
+    if (!perk) {
+      sendJson(res, 404, { message: "Perk not found." });
+      return;
+    }
+
+    const db = await vipDb.readDb();
+    sendJson(res, 200, {
+      perk: publicPerk(perk),
+      perks: (db.perks || []).map(publicPerk),
+      summary: buildSummary(db),
+    });
+    return;
+  }
+
+  if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/perks/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/admin/perks/", ""));
+    const deletedPerk = await vipDb.deletePerk(id);
+    if (!deletedPerk) {
+      sendJson(res, 404, { message: "Perk not found." });
+      return;
+    }
+
+    const db = await vipDb.readDb();
+    sendJson(res, 200, {
+      deletedPerk: publicPerk(deletedPerk),
+      perks: (db.perks || []).map(publicPerk),
       summary: buildSummary(db),
     });
     return;
@@ -1375,6 +1472,90 @@ function nextMemberId(index) {
   return `JCM-VIP-${String(251 + Number(index || 0)).padStart(4, "0")}`;
 }
 
+function normalizePerkRecord(record) {
+  const patch = normalizePerkPatch(record);
+  return {
+    id: `perk_${Date.now()}_${randomBytes(3).toString("hex")}`,
+    title: patch.title || "VIP Perk",
+    description: patch.description || "",
+    note: patch.note || "",
+    icon: patch.icon || "star",
+    accent: patch.accent || "red",
+    buttonLabel: patch.buttonLabel || "View",
+    actionUrl: patch.actionUrl || "",
+    actionMessage: patch.actionMessage || "",
+    visible: record.visible !== false,
+  };
+}
+
+function normalizePerkPatch(record) {
+  const patch = {};
+  if ("title" in record) {
+    patch.title = String(record.title || "VIP Perk").trim().slice(0, 80) || "VIP Perk";
+  }
+  if ("description" in record) {
+    patch.description = String(record.description || "").trim().slice(0, 220);
+  }
+  if ("note" in record) {
+    patch.note = String(record.note || "").trim().slice(0, 90);
+  }
+  if ("icon" in record) {
+    patch.icon = normalizePerkIcon(record.icon);
+  }
+  if ("accent" in record) {
+    patch.accent = normalizePerkAccent(record.accent);
+  }
+  if ("buttonLabel" in record) {
+    patch.buttonLabel = String(record.buttonLabel || "View").trim().slice(0, 24) || "View";
+  }
+  if ("actionUrl" in record) {
+    patch.actionUrl = normalizeOptionalUrl(record.actionUrl);
+  }
+  if ("actionMessage" in record) {
+    patch.actionMessage = String(record.actionMessage || "").trim().slice(0, 120);
+  }
+  if ("visible" in record) {
+    patch.visible = record.visible !== false;
+  }
+
+  return patch;
+}
+
+function normalizePerkIcon(icon) {
+  const allowedIcons = new Set([
+    "badge-percent",
+    "bell",
+    "calendar-days",
+    "crown",
+    "gift",
+    "heart-handshake",
+    "megaphone",
+    "sparkles",
+    "star",
+    "ticket",
+    "users",
+  ]);
+  const cleanIcon = String(icon || "").trim().toLowerCase();
+  return allowedIcons.has(cleanIcon) ? cleanIcon : "star";
+}
+
+function normalizePerkAccent(accent) {
+  const cleanAccent = String(accent || "").trim().toLowerCase();
+  return ["red", "blue", "green", "yellow"].includes(cleanAccent) ? cleanAccent : "red";
+}
+
+function normalizeOptionalUrl(value) {
+  const rawUrl = String(value || "").trim();
+  if (!rawUrl) return "";
+
+  try {
+    const url = new URL(rawUrl);
+    return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol) ? url.href : "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function publicMember(member) {
   const name = displayNameFromParts(member);
   const status = displayMemberStatus(member);
@@ -1394,6 +1575,21 @@ function publicMember(member) {
     hasPassword: Boolean(member.passwordHash),
     passwordSetAt: member.passwordSetAt || null,
     preferences: member.preferences || {},
+  };
+}
+
+function publicPerk(perk) {
+  return {
+    id: perk.id,
+    title: perk.title || "VIP Perk",
+    description: perk.description || "",
+    note: perk.note || "",
+    icon: normalizePerkIcon(perk.icon),
+    accent: normalizePerkAccent(perk.accent),
+    buttonLabel: perk.buttonLabel || "View",
+    actionUrl: perk.actionUrl || "",
+    actionMessage: perk.actionMessage || "",
+    visible: perk.visible !== false,
   };
 }
 

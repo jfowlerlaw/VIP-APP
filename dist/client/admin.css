@@ -585,6 +585,19 @@ td small {
   flex: 1;
 }
 
+.inline-check {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 9px;
+}
+
+.inline-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+}
+
 .import-preview {
   min-height: 176px;
   padding: 12px;
@@ -652,6 +665,27 @@ td small {
   border-radius: var(--radius);
   color: #ffffff;
   background: var(--red);
+}
+
+.perk-list .accent-blue svg {
+  background: var(--blue);
+}
+
+.perk-list .accent-green svg {
+  background: var(--green);
+}
+
+.perk-list .accent-yellow svg {
+  color: #171717;
+  background: var(--yellow);
+}
+
+.perk-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .gift-list label {
