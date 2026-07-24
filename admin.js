@@ -469,11 +469,42 @@ function renderPushDevices(tokens) {
             <strong>${owner}</strong>
             <small>${details}</small>
           </div>
-          <span class="status-pill active">Enabled</span>
+          <div class="push-device-actions">
+            <span class="status-pill active">Enabled</span>
+            <button class="danger-button compact" type="button" data-delete-push-token="${escapeHtml(token.id || "")}" data-push-owner="${owner}">
+              Delete
+            </button>
+          </div>
         </article>
       `;
     })
     .join("");
+
+  pushDeviceList.querySelectorAll("[data-delete-push-token]").forEach((button) => {
+    button.addEventListener("click", () => deletePushToken(button));
+  });
+}
+
+async function deletePushToken(button) {
+  const tokenId = button.dataset.deletePushToken;
+  const owner = button.dataset.pushOwner || "this push device";
+  if (!tokenId) return;
+
+  const confirmed = window.confirm(`Delete the push device for ${owner}?`);
+  if (!confirmed) return;
+
+  button.disabled = true;
+  try {
+    const result = await apiRequest(`/api/admin/push-tokens/${encodeURIComponent(tokenId)}`, {
+      method: "DELETE",
+    });
+    renderPushAdmin(result);
+    if (result.summary) renderSummary(result.summary);
+    showToast("Push device deleted.");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message || "Push device could not be deleted.");
+  }
 }
 
 function renderPushError(error) {

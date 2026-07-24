@@ -308,17 +308,18 @@ export function createDatabase({ rootDir, seedDatabase }) {
     return pushTokenFromRow(rows[0]);
   }
 
-  async function deletePushToken({ memberId, token } = {}) {
-    if (!memberId && !token) return [];
+  async function deletePushToken({ id, memberId, token } = {}) {
+    if (!id && !memberId && !token) return [];
 
     if (!supabase) {
       const db = await readLocalDb();
       const pushTokens = db.pushTokens || [];
       const deleted = [];
       db.pushTokens = pushTokens.filter((pushToken) => {
+        const idMatches = !id || pushToken.id === id;
         const memberMatches = !memberId || pushToken.memberId === memberId;
         const tokenMatches = !token || pushToken.token === token;
-        const shouldDelete = memberMatches && tokenMatches;
+        const shouldDelete = idMatches && memberMatches && tokenMatches;
         if (shouldDelete) deleted.push(pushToken);
         return !shouldDelete;
       });
@@ -327,6 +328,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
     }
 
     const params = { select: "*" };
+    if (id) params.id = `eq.${id}`;
     if (memberId) params.member_id = `eq.${memberId}`;
     if (token) params.token = `eq.${token}`;
 

@@ -732,6 +732,29 @@ async function handleAdminApi(req, res, url) {
     return;
   }
 
+  if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/push-tokens/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/admin/push-tokens/", ""));
+    if (!id) {
+      sendJson(res, 400, { message: "Push device id is required." });
+      return;
+    }
+
+    const deletedTokens = await vipDb.deletePushToken({ id });
+    if (deletedTokens.length === 0) {
+      sendJson(res, 404, { message: "Push device not found." });
+      return;
+    }
+
+    const db = await vipDb.readDb();
+    sendJson(res, 200, {
+      deleted: deletedTokens.map(publicPushToken),
+      apns: apnsSetupStatus(),
+      tokens: await listAdminPushTokens(),
+      summary: buildSummary(db),
+    });
+    return;
+  }
+
   if (route === "POST /api/admin/push/send-test") {
     const body = await readJsonBody(req);
     const rawTokens = await vipDb.listPushTokens({ enabledOnly: true });

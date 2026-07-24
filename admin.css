@@ -165,7 +165,8 @@ p {
 .primary-button,
 .ghost-button,
 td button,
-.perk-list button {
+.perk-list button,
+.push-device-list button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -192,7 +193,8 @@ td button,
 
 .ghost-button,
 td button,
-.perk-list button {
+.perk-list button,
+.push-device-list button {
   border: 1px solid var(--line);
   color: var(--ink);
   background: #ffffff;
@@ -204,7 +206,8 @@ td button,
   gap: 8px;
 }
 
-td button.danger-button {
+td button.danger-button,
+.push-device-list button.danger-button {
   border-color: rgba(201, 31, 46, 0.28);
   color: var(--red);
   background: #fff8f7;
@@ -661,6 +664,13 @@ td small {
 .push-device-list small {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.push-device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .fine-print.neutral {
