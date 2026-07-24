@@ -940,7 +940,7 @@ function apnsHost(environment) {
 }
 
 function apnsBundleId() {
-  return String(process.env.APNS_BUNDLE_ID || "com.justcallmoe.vip").trim();
+  return String(process.env.APNS_BUNDLE_ID || "com.justcallmoe.vipapp").trim();
 }
 
 function readApnsPrivateKey() {
@@ -1085,7 +1085,7 @@ function apnsFailureMessage(result) {
   }
 
   if (result.reason === "BadTopic") {
-    return "APNs rejected the topic header. APNS_BUNDLE_ID should be the plain app bundle ID, such as com.justcallmoe.vip.";
+    return "APNs rejected the topic header. APNS_BUNDLE_ID should be the plain app bundle ID, such as com.justcallmoe.vipapp.";
   }
 
   if (result.reason === "InvalidProviderToken") {

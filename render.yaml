@@ -27,7 +27,7 @@ services:
       - key: APNS_KEY_ID
         sync: false
       - key: APNS_BUNDLE_ID
-        value: com.justcallmoe.vip
+        value: com.justcallmoe.vipapp
       - key: APNS_ENV
         value: sandbox
       - key: APNS_PRIVATE_KEY_PATH

@@ -52,7 +52,7 @@ npm run cap:sync
 ```sh
 APNS_TEAM_ID=your-apple-team-id
 APNS_KEY_ID=your-apns-key-id
-APNS_BUNDLE_ID=com.justcallmoe.vip
+APNS_BUNDLE_ID=com.justcallmoe.vipapp
 APNS_ENV=sandbox
 APNS_PRIVATE_KEY_PATH=/etc/secrets/AuthKey_YOURKEYID.p8
 ```

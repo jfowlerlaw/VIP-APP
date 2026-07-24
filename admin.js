@@ -410,7 +410,7 @@ function renderPushAdmin(payload = {}) {
     pushConfigPill.className = `status-pill ${isConfigured ? "active" : "open"}`;
   }
   if (pushEnv) pushEnv.textContent = apns.environment || "sandbox";
-  if (pushBundle) pushBundle.textContent = apns.bundleId || "com.justcallmoe.vip";
+  if (pushBundle) pushBundle.textContent = apns.bundleId || "com.justcallmoe.vipapp";
   if (pushTeam) pushTeam.textContent = apns.teamId || "Missing";
   if (pushKey) pushKey.textContent = apns.keyId || "Missing";
   if (pushTokenCount) pushTokenCount.textContent = String(tokens.length);
