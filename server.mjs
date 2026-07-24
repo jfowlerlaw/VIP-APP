@@ -1076,6 +1076,18 @@ function parseApnsResponseBody(rawBody) {
 }
 
 function apnsFailureMessage(result) {
+  if (result.reason === "TopicDisallowed") {
+    return "APNs rejected this app topic. Confirm APNS_BUNDLE_ID exactly matches the iOS bundle ID, Push Notifications is enabled for that App ID in Apple Developer, and the APNs key belongs to the same Apple team.";
+  }
+
+  if (result.reason === "DeviceTokenNotForTopic") {
+    return "APNs says this device token belongs to a different app topic. Reinstall the latest app build, enable push again, and confirm APNS_BUNDLE_ID matches the iOS bundle ID.";
+  }
+
+  if (result.reason === "BadTopic") {
+    return "APNs rejected the topic header. APNS_BUNDLE_ID should be the plain app bundle ID, such as com.justcallmoe.vip.";
+  }
+
   if (result.reason === "BadDeviceToken") {
     return "APNs rejected that device token. Make sure APNS_ENV matches this build: sandbox for Xcode, production for TestFlight/App Store.";
   }

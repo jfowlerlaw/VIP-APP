@@ -13,6 +13,8 @@ const requestBoard = document.querySelector("[data-request-board]");
 const pushConfigPill = document.querySelector("[data-push-config-pill]");
 const pushEnv = document.querySelector("[data-push-env]");
 const pushBundle = document.querySelector("[data-push-bundle]");
+const pushTeam = document.querySelector("[data-push-team]");
+const pushKey = document.querySelector("[data-push-key]");
 const pushTokenCount = document.querySelector("[data-push-token-count]");
 const pushKeySource = document.querySelector("[data-push-key-source]");
 const pushMissing = document.querySelector("[data-push-missing]");
@@ -409,6 +411,8 @@ function renderPushAdmin(payload = {}) {
   }
   if (pushEnv) pushEnv.textContent = apns.environment || "sandbox";
   if (pushBundle) pushBundle.textContent = apns.bundleId || "com.justcallmoe.vip";
+  if (pushTeam) pushTeam.textContent = apns.teamId || "Missing";
+  if (pushKey) pushKey.textContent = apns.keyId || "Missing";
   if (pushTokenCount) pushTokenCount.textContent = String(tokens.length);
   if (pushKeySource) pushKeySource.textContent = apns.privateKeySource || "Missing";
   if (pushMissing) {
