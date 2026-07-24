@@ -1088,6 +1088,18 @@ function apnsFailureMessage(result) {
     return "APNs rejected the topic header. APNS_BUNDLE_ID should be the plain app bundle ID, such as com.justcallmoe.vip.";
   }
 
+  if (result.reason === "InvalidProviderToken") {
+    return "APNs rejected the provider token. Recheck APNS_TEAM_ID, APNS_KEY_ID, and the .p8 private key contents; the Key ID must match the downloaded AuthKey file and belong to the same Apple team.";
+  }
+
+  if (result.reason === "ExpiredProviderToken") {
+    return "APNs says the provider token is expired. Redeploy Render so the server restarts and generates a fresh APNs token.";
+  }
+
+  if (result.reason === "BadEnvironmentKeyIdInToken") {
+    return "APNs says the key ID does not match this APNs environment. Confirm APNS_ENV and the APNs key in Apple Developer.";
+  }
+
   if (result.reason === "BadDeviceToken") {
     return "APNs rejected that device token. Make sure APNS_ENV matches this build: sandbox for Xcode, production for TestFlight/App Store.";
   }
