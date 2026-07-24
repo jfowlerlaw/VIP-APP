@@ -42,6 +42,10 @@
             <i data-lucide="messages-square" aria-hidden="true"></i>
             Concierge
           </button>
+          <button type="button" data-section-target="notifications">
+            <i data-lucide="bell-ring" aria-hidden="true"></i>
+            Notifications
+          </button>
         </nav>
         <a class="member-link" href="index.html">
           <i data-lucide="smartphone" aria-hidden="true"></i>
@@ -83,6 +87,11 @@
               <span>Event Links</span>
               <strong data-metric-events>2</strong>
               <small>Eventbrite powered</small>
+            </article>
+            <article class="metric">
+              <span>Push Devices</span>
+              <strong data-metric-push>0</strong>
+              <small>Registered iPhones</small>
             </article>
           </div>
 
@@ -449,6 +458,87 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
               </article>
             </div>
           </div>
+        </section>
+
+        <section class="admin-section" id="section-notifications" aria-label="Push notifications">
+          <div class="editor-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">APNs</p>
+                  <h2>Push Setup</h2>
+                </div>
+                <span class="status-pill paused" data-push-config-pill>Checking</span>
+              </div>
+              <dl class="config-list">
+                <div>
+                  <dt>Environment</dt>
+                  <dd data-push-env>Sandbox</dd>
+                </div>
+                <div>
+                  <dt>Bundle ID</dt>
+                  <dd data-push-bundle>com.justcallmoe.vip</dd>
+                </div>
+                <div>
+                  <dt>Registered devices</dt>
+                  <dd data-push-token-count>0</dd>
+                </div>
+                <div>
+                  <dt>Private key</dt>
+                  <dd data-push-key-source>Missing</dd>
+                </div>
+              </dl>
+              <div class="setup-message" data-push-missing>
+                Checking APNs configuration.
+              </div>
+              <button class="ghost-button compact" type="button" data-refresh-push>
+                <i data-lucide="refresh-cw" aria-hidden="true"></i>
+                Refresh Status
+              </button>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Test</p>
+                  <h2>Send Test Push</h2>
+                </div>
+              </div>
+              <form class="stack-form" data-push-test-form>
+                <label>
+                  Device
+                  <select name="tokenId" data-push-token-select>
+                    <option value="">No registered devices yet</option>
+                  </select>
+                </label>
+                <label>
+                  Title
+                  <input name="title" value="Just Call Moe VIP">
+                </label>
+                <label>
+                  Message
+                  <textarea name="message" rows="3">This is a test notification from the VIP admin portal.</textarea>
+                </label>
+                <button class="primary-button" type="submit" data-push-send-button>
+                  <i data-lucide="send" aria-hidden="true"></i>
+                  Send Test Push
+                </button>
+                <p class="fine-print neutral" data-push-test-result>Send to one registered iPhone first.</p>
+              </form>
+            </section>
+          </div>
+
+          <section class="panel push-device-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Devices</p>
+                <h2>Registered Push Tokens</h2>
+              </div>
+            </div>
+            <div class="push-device-list" data-push-device-list>
+              <p>No registered iPhones yet.</p>
+            </div>
+          </section>
         </section>
       </main>
     </div>

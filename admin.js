@@ -10,6 +10,16 @@ const importPreview = document.querySelector("[data-import-preview]");
 const importCount = document.querySelector("[data-import-count]");
 const runImportButton = document.querySelector("[data-run-import]");
 const requestBoard = document.querySelector("[data-request-board]");
+const pushConfigPill = document.querySelector("[data-push-config-pill]");
+const pushEnv = document.querySelector("[data-push-env]");
+const pushBundle = document.querySelector("[data-push-bundle]");
+const pushTokenCount = document.querySelector("[data-push-token-count]");
+const pushKeySource = document.querySelector("[data-push-key-source]");
+const pushMissing = document.querySelector("[data-push-missing]");
+const pushTokenSelect = document.querySelector("[data-push-token-select]");
+const pushDeviceList = document.querySelector("[data-push-device-list]");
+const pushSendButton = document.querySelector("[data-push-send-button]");
+const pushTestResult = document.querySelector("[data-push-test-result]");
 let previewRecords = [];
 let adminApiReady = false;
 let toastTimer;
@@ -63,9 +73,11 @@ function renderSummary(summary) {
   const memberMetric = document.querySelector("[data-metric-members]");
   const requestMetric = document.querySelector("[data-metric-requests]");
   const eventMetric = document.querySelector("[data-metric-events]");
+  const pushMetric = document.querySelector("[data-metric-push]");
   if (memberMetric) memberMetric.textContent = String(summary.activeMembers);
   if (requestMetric) requestMetric.textContent = String(summary.openRequests);
   if (eventMetric) eventMetric.textContent = String(summary.eventLinks);
+  if (pushMetric) pushMetric.textContent = String(summary.pushDevices || 0);
 }
 
 function activateSection(target) {
@@ -386,6 +398,111 @@ function renderRequests(requests) {
   bindRequestStatusControls();
 }
 
+function renderPushAdmin(payload = {}) {
+  const apns = payload.apns || {};
+  const tokens = Array.isArray(payload.tokens) ? payload.tokens : [];
+  const isConfigured = Boolean(apns.configured);
+
+  if (pushConfigPill) {
+    pushConfigPill.textContent = isConfigured ? "Ready" : "Needs setup";
+    pushConfigPill.className = `status-pill ${isConfigured ? "active" : "open"}`;
+  }
+  if (pushEnv) pushEnv.textContent = apns.environment || "sandbox";
+  if (pushBundle) pushBundle.textContent = apns.bundleId || "com.justcallmoe.vip";
+  if (pushTokenCount) pushTokenCount.textContent = String(tokens.length);
+  if (pushKeySource) pushKeySource.textContent = apns.privateKeySource || "Missing";
+  if (pushMissing) {
+    const missing = Array.isArray(apns.missing) ? apns.missing : [];
+    pushMissing.textContent = missing.length
+      ? `Missing: ${missing.join(", ")}`
+      : "APNs is configured. Send one test push before inviting beta users.";
+  }
+
+  if (pushTokenSelect) {
+    pushTokenSelect.innerHTML = "";
+    if (tokens.length === 0) {
+      pushTokenSelect.append(new Option("No registered devices yet", ""));
+    } else {
+      tokens.forEach((token) => {
+        const owner = token.memberName || token.memberEmail || token.memberId || "VIP device";
+        const label = `${owner} · ${token.tokenPreview || "registered"}`;
+        pushTokenSelect.append(new Option(label, token.id || ""));
+      });
+    }
+    pushTokenSelect.disabled = tokens.length === 0;
+  }
+
+  if (pushSendButton) {
+    pushSendButton.disabled = !isConfigured || tokens.length === 0;
+  }
+
+  renderPushDevices(tokens);
+}
+
+function renderPushDevices(tokens) {
+  if (!pushDeviceList) return;
+
+  if (!tokens.length) {
+    pushDeviceList.innerHTML = "<p>No registered iPhones yet.</p>";
+    return;
+  }
+
+  pushDeviceList.innerHTML = tokens
+    .map((token) => {
+      const owner = escapeHtml(token.memberName || token.memberEmail || token.memberId || "VIP device");
+      const details = [
+        token.platform || "ios",
+        token.environment || "",
+        token.tokenPreview || "registered",
+        token.lastRegisteredAt ? `Registered ${formatDateTime(token.lastRegisteredAt)}` : "",
+      ]
+        .filter(Boolean)
+        .map(escapeHtml)
+        .join(" · ");
+      return `
+        <article>
+          <div>
+            <strong>${owner}</strong>
+            <small>${details}</small>
+          </div>
+          <span class="status-pill active">Enabled</span>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderPushError(error) {
+  if (pushConfigPill) {
+    pushConfigPill.textContent = "Error";
+    pushConfigPill.className = "status-pill error";
+  }
+  if (pushMissing) pushMissing.textContent = error.message || "Push status could not be loaded.";
+  if (pushSendButton) pushSendButton.disabled = true;
+}
+
+async function loadPushAdminStatus() {
+  try {
+    const payload = await apiRequest("/api/admin/push/status");
+    renderPushAdmin(payload);
+    return payload;
+  } catch (error) {
+    renderPushError(error);
+    return null;
+  }
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function bindRequestStatusControls() {
   document.querySelectorAll("[data-request-status]").forEach((select) => {
     if (select.dataset.bound === "true") return;
@@ -463,14 +580,16 @@ async function loadAdminData() {
     adminApiReady = true;
     renderSummary(summary.summary);
 
-    const [members, events, requests] = await Promise.all([
+    const [members, events, requests, push] = await Promise.all([
       apiRequest("/api/admin/members"),
       apiRequest("/api/admin/events"),
       apiRequest("/api/admin/requests"),
+      apiRequest("/api/admin/push/status"),
     ]);
     renderMembers(members.members);
     renderEvents(events.events);
     renderRequests(requests.requests);
+    renderPushAdmin(push);
   } catch (error) {
     if (error.status === 401) {
       adminApiReady = false;
@@ -757,6 +876,48 @@ document.querySelector("[data-request-filter]")?.addEventListener("change", (eve
     const status = item.querySelector(".status-pill")?.textContent || "";
     item.hidden = value !== "All requests" && status !== value;
   });
+});
+
+document.querySelector("[data-refresh-push]")?.addEventListener("click", async () => {
+  await loadPushAdminStatus();
+  showToast("Push status refreshed.");
+});
+
+document.querySelector("[data-push-test-form]")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+
+  if (pushSendButton) pushSendButton.disabled = true;
+  if (pushTestResult) {
+    pushTestResult.textContent = "Sending test push...";
+    pushTestResult.className = "fine-print neutral";
+  }
+
+  try {
+    const result = await apiRequest("/api/admin/push/send-test", {
+      method: "POST",
+      body: JSON.stringify({
+        tokenId: String(data.get("tokenId") || ""),
+        title: String(data.get("title") || ""),
+        message: String(data.get("message") || ""),
+      }),
+    });
+
+    if (pushTestResult) {
+      pushTestResult.textContent = `${result.message} APNs ID: ${result.result?.apnsId || "accepted"}.`;
+      pushTestResult.className = "fine-print neutral";
+    }
+    showToast("Test push sent.");
+    await loadPushAdminStatus();
+  } catch (error) {
+    if (pushTestResult) {
+      pushTestResult.textContent = error.message || "Test push could not be sent.";
+      pushTestResult.className = "fine-print";
+    }
+    showToast(error.message || "Test push could not be sent.");
+    await loadPushAdminStatus();
+  }
 });
 
 document.querySelector("[data-export]")?.addEventListener("click", () => {

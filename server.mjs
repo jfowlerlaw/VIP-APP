@@ -1,9 +1,10 @@
 import { createServer } from "node:http";
+import http2 from "node:http2";
 import { stat } from "node:fs/promises";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes, randomInt, scrypt, timingSafeEqual } from "node:crypto";
+import { createSign, randomBytes, randomInt, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { createDatabase } from "./database.mjs";
 
@@ -20,6 +21,11 @@ const maxBodyBytes = 1_000_000;
 const conciergeEmail = process.env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
 const passwordMinLength = 8;
 const passwordHashParams = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const apnsJwtCache = {
+  cacheKey: "",
+  token: "",
+  createdAt: 0,
+};
 const nativeCorsOrigins = new Set([
   "capacitor://localhost",
   "ionic://localhost",
@@ -712,8 +718,83 @@ async function handleAdminApi(req, res, url) {
   }
 
   if (route === "GET /api/admin/push-tokens") {
-    const tokens = await vipDb.listPushTokens({ enabledOnly: true });
-    sendJson(res, 200, { tokens: tokens.map(publicPushToken) });
+    const tokens = await listAdminPushTokens();
+    sendJson(res, 200, { tokens });
+    return;
+  }
+
+  if (route === "GET /api/admin/push/status") {
+    const tokens = await listAdminPushTokens();
+    sendJson(res, 200, {
+      apns: apnsSetupStatus(),
+      tokens,
+    });
+    return;
+  }
+
+  if (route === "POST /api/admin/push/send-test") {
+    const body = await readJsonBody(req);
+    const rawTokens = await vipDb.listPushTokens({ enabledOnly: true });
+    const targetToken = selectPushTestToken(rawTokens, body.tokenId);
+
+    if (!targetToken) {
+      sendJson(res, 404, { message: "No enabled iPhone push token is available yet." });
+      return;
+    }
+
+    const apnsStatus = apnsSetupStatus();
+    if (!apnsStatus.configured) {
+      sendJson(res, 400, {
+        message: `APNs is missing: ${apnsStatus.missing.join(", ")}.`,
+        apns: apnsStatus,
+      });
+      return;
+    }
+
+    const member = targetToken.memberId ? await vipDb.getMemberById(targetToken.memberId) : null;
+    const title = String(body.title || "Just Call Moe VIP").trim().slice(0, 80) || "Just Call Moe VIP";
+    const message =
+      String(body.message || body.body || "This is a test notification from the VIP admin portal.")
+        .trim()
+        .slice(0, 180) || "This is a test notification from the VIP admin portal.";
+
+    let result;
+    try {
+      result = await sendApnsNotification({
+        token: targetToken.token,
+        title,
+        body: message,
+        data: {
+          view: "events",
+          source: "admin-test",
+        },
+      });
+    } catch (error) {
+      sendJson(res, 502, {
+        message: error.message || "APNs request failed.",
+        apns: apnsStatus,
+        token: publicAdminPushToken(targetToken, member),
+      });
+      return;
+    }
+
+    const publicToken = publicAdminPushToken(targetToken, member);
+    if (!result.ok) {
+      sendJson(res, 502, {
+        message: apnsFailureMessage(result),
+        apns: apnsStatus,
+        token: publicToken,
+        result,
+      });
+      return;
+    }
+
+    sendJson(res, 200, {
+      message: `Test push sent to ${publicToken.memberName || publicToken.memberEmail || "the selected VIP device"}.`,
+      apns: apnsStatus,
+      token: publicToken,
+      result,
+    });
     return;
   }
 
@@ -768,6 +849,242 @@ async function serveStatic(req, res, url) {
   }
 
   createReadStream(filePath).pipe(res);
+}
+
+async function listAdminPushTokens() {
+  const [tokens, members] = await Promise.all([
+    vipDb.listPushTokens({ enabledOnly: true }),
+    vipDb.listMembers(),
+  ]);
+  const membersById = new Map(members.map((member) => [member.id, member]));
+
+  return tokens
+    .slice()
+    .sort((left, right) => {
+      const leftDate = new Date(left.lastRegisteredAt || left.updatedAt || left.createdAt || 0).getTime();
+      const rightDate = new Date(right.lastRegisteredAt || right.updatedAt || right.createdAt || 0).getTime();
+      return rightDate - leftDate;
+    })
+    .map((pushToken) => publicAdminPushToken(pushToken, membersById.get(pushToken.memberId)));
+}
+
+function selectPushTestToken(tokens, tokenId) {
+  const iosTokens = (tokens || [])
+    .filter((pushToken) => pushToken.enabled !== false && normalizePushPlatform(pushToken.platform) === "ios")
+    .sort((left, right) => {
+      const leftDate = new Date(left.lastRegisteredAt || left.updatedAt || left.createdAt || 0).getTime();
+      const rightDate = new Date(right.lastRegisteredAt || right.updatedAt || right.createdAt || 0).getTime();
+      return rightDate - leftDate;
+    });
+
+  if (tokenId) {
+    return iosTokens.find((pushToken) => pushToken.id === tokenId) || null;
+  }
+
+  return iosTokens[0] || null;
+}
+
+function apnsSetupStatus() {
+  const environment = apnsEnvironment();
+  const keyId = String(process.env.APNS_KEY_ID || "").trim();
+  const teamId = String(process.env.APNS_TEAM_ID || "").trim();
+  const bundleId = apnsBundleId();
+  const privateKeyPath = String(process.env.APNS_PRIVATE_KEY_PATH || "").trim();
+  const hasPrivateKeyValue = Boolean(String(process.env.APNS_PRIVATE_KEY || "").trim());
+  const missing = [];
+
+  if (!teamId) missing.push("APNS_TEAM_ID");
+  if (!keyId) missing.push("APNS_KEY_ID");
+  if (!bundleId) missing.push("APNS_BUNDLE_ID");
+  if (!privateKeyPath && !hasPrivateKeyValue) {
+    missing.push("APNS_PRIVATE_KEY_PATH or APNS_PRIVATE_KEY");
+  } else if (privateKeyPath && !existsSync(privateKeyPath)) {
+    missing.push(`APNS_PRIVATE_KEY_PATH file (${privateKeyPath})`);
+  }
+
+  return {
+    configured: missing.length === 0,
+    environment,
+    host: apnsHost(environment).replace(/^https:\/\//, ""),
+    bundleId,
+    keyId: maskSecret(keyId),
+    teamId: maskSecret(teamId),
+    privateKeySource: privateKeyPath ? "secret file" : hasPrivateKeyValue ? "environment variable" : "missing",
+    missing,
+  };
+}
+
+function getApnsConfig() {
+  const status = apnsSetupStatus();
+  if (!status.configured) {
+    throw new Error(`APNs is missing: ${status.missing.join(", ")}.`);
+  }
+
+  return {
+    environment: status.environment,
+    host: apnsHost(status.environment),
+    keyId: String(process.env.APNS_KEY_ID || "").trim(),
+    teamId: String(process.env.APNS_TEAM_ID || "").trim(),
+    bundleId: apnsBundleId(),
+    privateKey: readApnsPrivateKey(),
+  };
+}
+
+function apnsEnvironment() {
+  const environment = String(process.env.APNS_ENV || "sandbox").trim().toLowerCase();
+  return environment === "production" || environment === "prod" ? "production" : "sandbox";
+}
+
+function apnsHost(environment) {
+  return environment === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com";
+}
+
+function apnsBundleId() {
+  return String(process.env.APNS_BUNDLE_ID || "com.justcallmoe.vip").trim();
+}
+
+function readApnsPrivateKey() {
+  const privateKeyPath = String(process.env.APNS_PRIVATE_KEY_PATH || "").trim();
+  if (privateKeyPath) {
+    return normalizeApnsPrivateKey(readFileSync(privateKeyPath, "utf8"));
+  }
+
+  return normalizeApnsPrivateKey(process.env.APNS_PRIVATE_KEY || "");
+}
+
+function normalizeApnsPrivateKey(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n");
+}
+
+function apnsProviderToken(config) {
+  const now = Math.floor(Date.now() / 1000);
+  const cacheKey = [config.teamId, config.keyId, config.privateKey].join(":");
+  if (apnsJwtCache.cacheKey === cacheKey && apnsJwtCache.token && now - apnsJwtCache.createdAt < 20 * 60) {
+    return apnsJwtCache.token;
+  }
+
+  const header = base64Url(JSON.stringify({ alg: "ES256", kid: config.keyId }));
+  const claims = base64Url(JSON.stringify({ iss: config.teamId, iat: now }));
+  const signingInput = `${header}.${claims}`;
+  const signer = createSign("SHA256");
+  signer.update(signingInput);
+  signer.end();
+  const signature = signer.sign({ key: config.privateKey, dsaEncoding: "ieee-p1363" });
+  const token = `${signingInput}.${base64Url(signature)}`;
+
+  apnsJwtCache.cacheKey = cacheKey;
+  apnsJwtCache.token = token;
+  apnsJwtCache.createdAt = now;
+
+  return token;
+}
+
+function base64Url(value) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function sendApnsNotification({ token, title, body, data = {} }) {
+  const config = getApnsConfig();
+  const authorization = `bearer ${apnsProviderToken(config)}`;
+  const payload = JSON.stringify({
+    aps: {
+      alert: { title, body },
+      sound: "default",
+    },
+    ...data,
+  });
+  const client = http2.connect(config.host);
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let responseBody = "";
+    let statusCode = 0;
+    let apnsId = "";
+    const timeout = setTimeout(() => {
+      fail(new Error("APNs request timed out."));
+      client.destroy();
+    }, 15000);
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      client.close();
+      resolve(result);
+    };
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      client.destroy();
+      reject(error);
+    };
+
+    client.on("error", fail);
+
+    const request = client.request({
+      ":method": "POST",
+      ":path": `/3/device/${token}`,
+      authorization,
+      "apns-topic": config.bundleId,
+      "apns-push-type": "alert",
+      "apns-priority": "10",
+      "apns-expiration": "0",
+      "apns-request-id": randomUUID(),
+      "content-type": "application/json",
+    });
+
+    request.setEncoding("utf8");
+    request.on("response", (headers) => {
+      statusCode = Number(headers[":status"] || 0);
+      apnsId = String(headers["apns-id"] || "");
+    });
+    request.on("data", (chunk) => {
+      responseBody += chunk;
+    });
+    request.on("error", fail);
+    request.on("end", () => {
+      const details = parseApnsResponseBody(responseBody);
+      finish({
+        ok: statusCode >= 200 && statusCode < 300,
+        status: statusCode,
+        apnsId,
+        reason: details.reason || "",
+        details,
+      });
+    });
+    request.end(payload);
+  });
+}
+
+function parseApnsResponseBody(rawBody) {
+  if (!rawBody) return {};
+
+  try {
+    return JSON.parse(rawBody);
+  } catch (error) {
+    return { raw: rawBody };
+  }
+}
+
+function apnsFailureMessage(result) {
+  if (result.reason === "BadDeviceToken") {
+    return "APNs rejected that device token. Make sure APNS_ENV matches this build: sandbox for Xcode, production for TestFlight/App Store.";
+  }
+
+  if (result.reason) {
+    return `APNs rejected the test notification: ${result.reason}.`;
+  }
+
+  return `APNs rejected the test notification with status ${result.status || "unknown"}.`;
 }
 
 async function sendConciergeEmail({ member, request }) {
@@ -929,6 +1246,7 @@ function buildSummary(db) {
     activeMembers: db.members.filter((member) => !isPausedStatus(member.status)).length,
     openRequests: db.requests.filter((request) => request.status !== "Closed").length,
     eventLinks: db.events.filter((event) => event.visible !== false).length,
+    pushDevices: (db.pushTokens || []).filter((pushToken) => pushToken.enabled !== false).length,
   };
 }
 
@@ -1046,6 +1364,22 @@ function publicPushToken(pushToken) {
     lastRegisteredAt: pushToken.lastRegisteredAt,
     createdAt: pushToken.createdAt,
   };
+}
+
+function publicAdminPushToken(pushToken, member) {
+  return {
+    ...publicPushToken(pushToken),
+    memberName: member ? displayNameFromParts(member) : "",
+    memberEmail: member?.email || "",
+    memberCity: member?.city || "",
+  };
+}
+
+function maskSecret(value) {
+  const cleanValue = String(value || "").trim();
+  if (!cleanValue) return "";
+  if (cleanValue.length <= 4) return "set";
+  return `${cleanValue.slice(0, 3)}...${cleanValue.slice(-2)}`;
 }
 
 function normalizePushPlatform(platform) {

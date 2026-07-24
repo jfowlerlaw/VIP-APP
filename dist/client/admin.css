@@ -447,6 +447,10 @@ td small {
   background: var(--blue);
 }
 
+.status-pill.error {
+  background: var(--red);
+}
+
 .stack-form {
   display: grid;
   gap: 12px;
@@ -591,6 +595,76 @@ td small {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+
+.config-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.config-list div,
+.push-device-list article,
+.setup-message {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--wash);
+}
+
+.config-list dt {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.config-list dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.setup-message {
+  margin-bottom: 12px;
+  color: var(--soft-ink);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.push-device-panel {
+  margin-top: 16px;
+}
+
+.push-device-list {
+  display: grid;
+  gap: 10px;
+}
+
+.push-device-list article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.push-device-list strong,
+.push-device-list small {
+  display: block;
+}
+
+.push-device-list small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.fine-print.neutral {
+  color: var(--muted);
 }
 
 .admin-dialog {
@@ -779,7 +853,12 @@ td small {
 
   .gift-list label,
   .request-board article,
-  .perk-list article {
+  .perk-list article,
+  .push-device-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .config-list {
     grid-template-columns: 1fr;
   }
 
