@@ -22,6 +22,10 @@ const pushTokenSelect = document.querySelector("[data-push-token-select]");
 const pushDeviceList = document.querySelector("[data-push-device-list]");
 const pushSendButton = document.querySelector("[data-push-send-button]");
 const pushTestResult = document.querySelector("[data-push-test-result]");
+const adminThemeControls = document.querySelectorAll("[data-admin-theme-choice]");
+const adminThemeColorMeta = document.querySelector('meta[name="theme-color"]');
+const adminThemeStorageKey = "jcm-vip-admin-theme";
+const adminThemeMedia = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 let previewRecords = [];
 let adminApiReady = false;
 let toastTimer;
@@ -55,6 +59,51 @@ function showToast(message) {
     toast.classList.remove("is-visible");
   }, 2400);
 }
+
+function normalizeAdminThemePreference(preference) {
+  return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
+}
+
+function getStoredAdminThemePreference() {
+  try {
+    return normalizeAdminThemePreference(localStorage.getItem(adminThemeStorageKey));
+  } catch (error) {
+    return "system";
+  }
+}
+
+function resolveAdminTheme(preference) {
+  const nextPreference = normalizeAdminThemePreference(preference);
+  return nextPreference === "system" ? (adminThemeMedia?.matches ? "dark" : "light") : nextPreference;
+}
+
+function applyAdminThemePreference(preference, options = {}) {
+  const nextPreference = normalizeAdminThemePreference(preference);
+  const nextTheme = resolveAdminTheme(nextPreference);
+  document.documentElement.dataset.theme = nextTheme;
+  document.documentElement.dataset.themePreference = nextPreference;
+  adminThemeColorMeta?.setAttribute("content", nextTheme === "dark" ? "#12110f" : "#f6f4ef");
+
+  adminThemeControls.forEach((control) => {
+    const isSelected = control.dataset.adminThemeChoice === nextPreference;
+    control.setAttribute("aria-pressed", String(isSelected));
+  });
+
+  if (options.persist) {
+    try {
+      localStorage.setItem(adminThemeStorageKey, nextPreference);
+    } catch (error) {
+      // Local storage can be unavailable in private browsing contexts.
+    }
+  }
+
+  if (options.notify) {
+    const label = nextPreference === "system" ? "System appearance" : `${nextPreference === "dark" ? "Dark" : "Light"} mode`;
+    showToast(`${label} on.`);
+  }
+}
+
+applyAdminThemePreference(getStoredAdminThemePreference());
 
 function statusClass(status) {
   const normalized = String(status || "").toLowerCase();
@@ -912,6 +961,26 @@ document.querySelector("[data-request-filter]")?.addEventListener("change", (eve
     item.hidden = value !== "All requests" && status !== value;
   });
 });
+
+adminThemeControls.forEach((control) => {
+  control.addEventListener("click", () => {
+    applyAdminThemePreference(control.dataset.adminThemeChoice, { persist: true, notify: true });
+  });
+});
+
+if (adminThemeMedia) {
+  const syncSystemAdminTheme = () => {
+    if (document.documentElement.dataset.themePreference === "system") {
+      applyAdminThemePreference("system");
+    }
+  };
+
+  if (typeof adminThemeMedia.addEventListener === "function") {
+    adminThemeMedia.addEventListener("change", syncSystemAdminTheme);
+  } else if (typeof adminThemeMedia.addListener === "function") {
+    adminThemeMedia.addListener(syncSystemAdminTheme);
+  }
+}
 
 document.querySelector("[data-refresh-push]")?.addEventListener("click", async () => {
   await loadPushAdminStatus();

@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Just Call Moe VIP Admin</title>
     <meta name="description" content="Admin dashboard for the Just Call Moe VIP member portal beta.">
+    <meta name="theme-color" content="#f6f4ef">
+    <script>
+      (() => {
+        try {
+          const preference = localStorage.getItem("jcm-vip-admin-theme") || "system";
+          const normalized = ["system", "light", "dark"].includes(preference) ? preference : "system";
+          const isDark = normalized === "dark" || (normalized === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = isDark ? "dark" : "light";
+          document.documentElement.dataset.themePreference = normalized;
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+          document.documentElement.dataset.themePreference = "system";
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="admin.css">
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="admin.js"></script>
@@ -60,6 +75,20 @@
             <h1 id="section-title">Overview</h1>
           </div>
           <div class="topbar-actions">
+            <div class="admin-theme-choice" aria-label="Appearance">
+              <button type="button" data-admin-theme-choice="system" title="Match system">
+                <i data-lucide="monitor" aria-hidden="true"></i>
+                <span>System</span>
+              </button>
+              <button type="button" data-admin-theme-choice="light" title="Light mode">
+                <i data-lucide="sun" aria-hidden="true"></i>
+                <span>Light</span>
+              </button>
+              <button type="button" data-admin-theme-choice="dark" title="Dark mode">
+                <i data-lucide="moon" aria-hidden="true"></i>
+                <span>Dark</span>
+              </button>
+            </div>
             <button class="ghost-button" type="button" data-export>
               <i data-lucide="download" aria-hidden="true"></i>
               Export
