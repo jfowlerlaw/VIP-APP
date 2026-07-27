@@ -754,6 +754,10 @@ td small {
   margin-top: 16px;
 }
 
+.push-broadcast-panel {
+  grid-column: 1 / -1;
+}
+
 .push-device-list {
   display: grid;
   gap: 10px;

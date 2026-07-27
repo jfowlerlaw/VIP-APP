@@ -25,6 +25,8 @@ const pushTokenSelect = document.querySelector("[data-push-token-select]");
 const pushDeviceList = document.querySelector("[data-push-device-list]");
 const pushSendButton = document.querySelector("[data-push-send-button]");
 const pushTestResult = document.querySelector("[data-push-test-result]");
+const pushBroadcastButton = document.querySelector("[data-push-broadcast-button]");
+const pushBroadcastResult = document.querySelector("[data-push-broadcast-result]");
 const adminThemeControls = document.querySelectorAll("[data-admin-theme-choice]");
 const adminThemeColorMeta = document.querySelector('meta[name="theme-color"]');
 const adminThemeStorageKey = "jcm-vip-admin-theme";
@@ -610,6 +612,10 @@ function renderPushAdmin(payload = {}) {
     pushSendButton.disabled = !isConfigured || tokens.length === 0;
   }
 
+  if (pushBroadcastButton) {
+    pushBroadcastButton.disabled = !isConfigured || tokens.length === 0;
+  }
+
   renderPushDevices(tokens);
 }
 
@@ -684,6 +690,7 @@ function renderPushError(error) {
   }
   if (pushMissing) pushMissing.textContent = error.message || "Push status could not be loaded.";
   if (pushSendButton) pushSendButton.disabled = true;
+  if (pushBroadcastButton) pushBroadcastButton.disabled = true;
 }
 
 async function loadPushAdminStatus() {
@@ -1170,6 +1177,46 @@ document.querySelector("[data-push-test-form]")?.addEventListener("submit", asyn
       pushTestResult.className = "fine-print";
     }
     showToast(error.message || "Test push could not be sent.");
+    await loadPushAdminStatus();
+  }
+});
+
+document.querySelector("[data-push-broadcast-form]")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+
+  if (pushBroadcastButton) pushBroadcastButton.disabled = true;
+  if (pushBroadcastResult) {
+    pushBroadcastResult.textContent = "Sending broadcast...";
+    pushBroadcastResult.className = "fine-print neutral";
+  }
+
+  try {
+    const result = await apiRequest("/api/admin/push/broadcast", {
+      method: "POST",
+      body: JSON.stringify({
+        title: String(data.get("title") || ""),
+        message: String(data.get("message") || ""),
+      }),
+    });
+    const summary = result.summary || {};
+    const failed = Number(summary.failed || 0);
+
+    if (pushBroadcastResult) {
+      pushBroadcastResult.textContent = failed
+        ? `${result.message} Delete or refresh stale devices before the next send.`
+        : result.message || "Broadcast sent.";
+      pushBroadcastResult.className = failed ? "fine-print" : "fine-print neutral";
+    }
+    showToast(failed ? "Broadcast sent with some failures." : "Broadcast sent.");
+    await loadPushAdminStatus();
+  } catch (error) {
+    if (pushBroadcastResult) {
+      pushBroadcastResult.textContent = error.message || "Broadcast could not be sent.";
+      pushBroadcastResult.className = "fine-print";
+    }
+    showToast(error.message || "Broadcast could not be sent.");
     await loadPushAdminStatus();
   }
 });

@@ -71,7 +71,7 @@ After at least one iPhone has enabled push notifications, open the admin dashboa
 - Verification codes, password login, and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
 - Set `SENDGRID_API_KEY`, `VIP_FROM_EMAIL`, and `VIP_REQUEST_EMAIL` in `.env` to turn on automatic email delivery.
 - In Render, set `VIP_SHOW_CODES=false` once `SENDGRID_API_KEY` is configured so real testers receive emailed random codes instead of seeing the beta code on screen.
-- The iPhone app can register push-notification device tokens once the native plugin, Xcode capability, and `vip_push_tokens` Supabase table are set up. Admins can send a single-device test push and delete stale push devices from the Notifications section after APNs is configured.
+- The iPhone app can register push-notification device tokens once the native plugin, Xcode capability, and `vip_push_tokens` Supabase table are set up. Admins can send a single-device test push, broadcast to every registered iPhone, and delete stale push devices from the Notifications section after APNs is configured.
 
 ## Supabase Database Setup
 

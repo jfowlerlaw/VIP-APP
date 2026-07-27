@@ -872,11 +872,11 @@ async function handleAdminApi(req, res, url) {
     }
 
     const member = targetToken.memberId ? await vipDb.getMemberById(targetToken.memberId) : null;
-    const title = String(body.title || "Just Call Moe VIP").trim().slice(0, 80) || "Just Call Moe VIP";
-    const message =
-      String(body.message || body.body || "This is a test notification from the VIP admin portal.")
-        .trim()
-        .slice(0, 180) || "This is a test notification from the VIP admin portal.";
+    const title = normalizePushTitle(body.title);
+    const message = normalizePushMessage(
+      body.message || body.body,
+      "This is a test notification from the VIP admin portal.",
+    );
 
     let result;
     try {
@@ -914,6 +914,84 @@ async function handleAdminApi(req, res, url) {
       apns: apnsStatus,
       token: publicToken,
       result,
+    });
+    return;
+  }
+
+  if (route === "POST /api/admin/push/broadcast") {
+    const body = await readJsonBody(req);
+    const apnsStatus = apnsSetupStatus();
+    if (!apnsStatus.configured) {
+      sendJson(res, 400, {
+        message: `APNs is missing: ${apnsStatus.missing.join(", ")}.`,
+        apns: apnsStatus,
+      });
+      return;
+    }
+
+    const targets = (await listAdminPushTokenRows()).filter(
+      ({ pushToken }) => pushToken.enabled !== false && normalizePushPlatform(pushToken.platform) === "ios",
+    );
+
+    if (targets.length === 0) {
+      sendJson(res, 404, { message: "No enabled iPhone push tokens are available yet.", apns: apnsStatus });
+      return;
+    }
+
+    const title = normalizePushTitle(body.title);
+    const message = normalizePushMessage(
+      body.message || body.body,
+      "You have a new VIP update from Just Call Moe.",
+    );
+    const deliveries = [];
+    const failures = [];
+
+    for (const { pushToken, member } of targets) {
+      const publicToken = publicAdminPushToken(pushToken, member);
+      try {
+        const result = await sendApnsNotification({
+          token: pushToken.token,
+          title,
+          body: message,
+          data: {
+            view: "events",
+            source: "admin-broadcast",
+          },
+        });
+
+        if (result.ok) {
+          deliveries.push({
+            token: publicToken,
+            apnsId: result.apnsId || "",
+            status: result.status,
+          });
+        } else {
+          failures.push({
+            token: publicToken,
+            status: result.status,
+            reason: result.reason || "APNsRejected",
+            message: apnsFailureMessage(result),
+          });
+        }
+      } catch (error) {
+        failures.push({
+          token: publicToken,
+          status: 0,
+          reason: "RequestFailed",
+          message: error.message || "APNs request failed.",
+        });
+      }
+    }
+
+    sendJson(res, 200, {
+      message: `Broadcast complete: ${deliveries.length} sent, ${failures.length} failed.`,
+      apns: apnsStatus,
+      summary: {
+        requested: targets.length,
+        sent: deliveries.length,
+        failed: failures.length,
+      },
+      failures: failures.slice(0, 20),
     });
     return;
   }
@@ -972,6 +1050,10 @@ async function serveStatic(req, res, url) {
 }
 
 async function listAdminPushTokens() {
+  return (await listAdminPushTokenRows()).map(({ pushToken, member }) => publicAdminPushToken(pushToken, member));
+}
+
+async function listAdminPushTokenRows() {
   const [tokens, members] = await Promise.all([
     vipDb.listPushTokens({ enabledOnly: true }),
     vipDb.listMembers(),
@@ -985,7 +1067,10 @@ async function listAdminPushTokens() {
       const rightDate = new Date(right.lastRegisteredAt || right.updatedAt || right.createdAt || 0).getTime();
       return rightDate - leftDate;
     })
-    .map((pushToken) => publicAdminPushToken(pushToken, membersById.get(pushToken.memberId)));
+    .map((pushToken) => ({
+      pushToken,
+      member: membersById.get(pushToken.memberId),
+    }));
 }
 
 function selectPushTestToken(tokens, tokenId) {
@@ -1002,6 +1087,14 @@ function selectPushTestToken(tokens, tokenId) {
   }
 
   return iosTokens[0] || null;
+}
+
+function normalizePushTitle(value, fallback = "Just Call Moe VIP") {
+  return String(value || fallback).trim().slice(0, 80) || fallback;
+}
+
+function normalizePushMessage(value, fallback) {
+  return String(value || fallback).trim().slice(0, 180) || fallback;
 }
 
 function apnsSetupStatus() {
