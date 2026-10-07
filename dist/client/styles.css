@@ -679,6 +679,14 @@ p {
   background: var(--inverse);
 }
 
+.eventbrite-link:disabled {
+  cursor: not-allowed;
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--field);
+  opacity: 1;
+}
+
 .concierge-panel {
   padding: 16px;
 }

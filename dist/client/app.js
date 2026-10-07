@@ -717,6 +717,25 @@ function updateNextInvite(events) {
   nextEventMeta.textContent = `${date}, ${location} · ${source} registration`;
 }
 
+function renderEventsUnavailable() {
+  if (eventsList) {
+    eventsList.innerHTML = `
+      <article class="event-card">
+        <div class="event-copy">
+          <p class="eyebrow">Events</p>
+          <h2>Invites temporarily unavailable</h2>
+          <p>Eventbrite listings could not be loaded. Please check again in a few minutes.</p>
+        </div>
+      </article>
+    `;
+  }
+
+  if (nextEventTitle && nextEventMeta) {
+    nextEventTitle.textContent = "Invites temporarily unavailable";
+    nextEventMeta.textContent = "Eventbrite listings could not be loaded.";
+  }
+}
+
 function renderEvents(events) {
   if (!eventsList || !Array.isArray(events)) return;
   const orderedEvents = getOrderedEvents(events);
@@ -764,13 +783,22 @@ function renderEvents(events) {
 
     const actions = document.createElement("div");
     actions.className = "event-actions";
-    const link = document.createElement("a");
-    link.className = "eventbrite-link";
-    link.href = event.eventbriteUrl || "#";
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = "Open Eventbrite";
-    actions.append(link);
+    if (event.eventbriteUrl) {
+      const link = document.createElement("a");
+      link.className = "eventbrite-link";
+      link.href = event.eventbriteUrl;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "Open Eventbrite";
+      actions.append(link);
+    } else {
+      const button = document.createElement("button");
+      button.className = "eventbrite-link";
+      button.type = "button";
+      button.disabled = true;
+      button.textContent = "Eventbrite coming soon";
+      actions.append(button);
+    }
 
     copy.append(eyebrow, title, description, meta, actions);
     article.append(copy);
@@ -778,6 +806,24 @@ function renderEvents(events) {
   });
 
   updateNextInvite(orderedEvents);
+}
+
+function renderPerksUnavailable() {
+  if (!perksList) return;
+  perksList.innerHTML = `
+    <article class="perk-card">
+      <div class="perk-icon">
+        <i data-lucide="sparkles" aria-hidden="true"></i>
+        <span class="fallback-icon" aria-hidden="true">V</span>
+      </div>
+      <div>
+        <h2>Perks temporarily unavailable</h2>
+        <p>VIP perks could not be loaded. Please check again in a few minutes.</p>
+        <small>VIP access is still active</small>
+      </div>
+    </article>
+  `;
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function renderPerks(perks) {
@@ -967,7 +1013,10 @@ claimForm?.addEventListener("submit", async (event) => {
       pendingClaim = null;
       pendingMember = null;
       if (claimMessage) {
-        claimMessage.textContent = error.message || "If this matches a VIP record, we will send a code.";
+        claimMessage.textContent =
+          error.status >= 500
+            ? "Member records are temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com."
+            : error.message || "If this matches a VIP record, we will send a code.";
       }
       return;
     }
@@ -1264,26 +1313,41 @@ async function bootBetaApi() {
   try {
     await apiRequest("/api/health");
     betaApiReady = true;
-
-    const events = await apiRequest("/api/events");
-    renderEvents(events.events);
-
-    const perks = await apiRequest("/api/perks");
-    renderPerks(perks.perks);
-
-    try {
-      const session = await apiRequest("/api/me");
-      applyMember(session.member);
-    } catch (error) {
-      if (error.status === 401) {
-        clearStoredMemberSession();
-      }
-      if (claimMessage) {
-        claimMessage.textContent = "Use the email address connected to your VIP membership.";
-      }
-    }
   } catch (error) {
     betaApiReady = false;
+    renderEventsUnavailable();
+    renderPerksUnavailable();
+    if (claimMessage) {
+      claimMessage.textContent =
+        "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
+    }
+    return;
+  }
+
+  try {
+    const events = await apiRequest("/api/events");
+    renderEvents(events.events);
+  } catch (error) {
+    renderEventsUnavailable();
+  }
+
+  try {
+    const perks = await apiRequest("/api/perks");
+    renderPerks(perks.perks);
+  } catch (error) {
+    renderPerksUnavailable();
+  }
+
+  try {
+    const session = await apiRequest("/api/me");
+    applyMember(session.member);
+  } catch (error) {
+    if (error.status === 401) {
+      clearStoredMemberSession();
+    }
+    if (claimMessage) {
+      claimMessage.textContent = "Use the email address connected to your VIP membership.";
+    }
   }
 }
 
