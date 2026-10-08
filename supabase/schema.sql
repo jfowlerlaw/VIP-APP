@@ -177,6 +177,9 @@ create table if not exists public.vip_member_sessions (
 create index if not exists vip_member_sessions_member_id
   on public.vip_member_sessions (member_id);
 
+create index if not exists vip_member_sessions_expires_at
+  on public.vip_member_sessions (expires_at);
+
 create table if not exists public.vip_admin_sessions (
   token text primary key,
   expires_at timestamptz not null,

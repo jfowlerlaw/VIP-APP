@@ -30,6 +30,10 @@ export function createDatabase({ rootDir, seedDatabase }) {
     listPushTokens,
     upsertPushToken,
     deletePushToken,
+    getMemberSession,
+    createMemberSession,
+    deleteMemberSession,
+    deleteMemberSessionsByMember,
   };
 
   async function ensureDatabase() {
@@ -141,6 +145,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
       const originalRequestCount = db.requests.length;
       db.requests = db.requests.filter((request) => request.memberId !== id);
       db.pushTokens = (db.pushTokens || []).filter((pushToken) => pushToken.memberId !== id);
+      db.memberSessions = (db.memberSessions || []).filter((session) => session.memberId !== id);
       await writeLocalDb(db);
 
       return {
@@ -423,6 +428,79 @@ export function createDatabase({ rootDir, seedDatabase }) {
     return rows ? rows.map(pushTokenFromRow) : [];
   }
 
+  async function getMemberSession(sessionToken) {
+    if (!sessionToken) return null;
+
+    if (!supabase) {
+      const db = await readLocalDb();
+      const session = (db.memberSessions || []).find((item) => item.token === sessionToken);
+      return session || null;
+    }
+
+    const rows = await supabaseRequest("vip_member_sessions", {
+      query: queryString({ select: "*", token: `eq.${sessionToken}` }),
+    });
+    return rows[0] ? memberSessionFromRow(rows[0]) : null;
+  }
+
+  async function createMemberSession(session) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      db.memberSessions ||= [];
+      db.memberSessions = db.memberSessions.filter((item) => item.token !== session.token);
+      db.memberSessions.unshift(session);
+      await writeLocalDb(db);
+      return session;
+    }
+
+    const rows = await supabaseRequest("vip_member_sessions", {
+      method: "POST",
+      body: memberSessionToRow(session),
+      headers: { Prefer: "return=representation" },
+    });
+    return rows[0] ? memberSessionFromRow(rows[0]) : session;
+  }
+
+  async function deleteMemberSession(sessionToken) {
+    if (!sessionToken) return [];
+
+    if (!supabase) {
+      const db = await readLocalDb();
+      const sessions = db.memberSessions || [];
+      const deleted = sessions.filter((session) => session.token === sessionToken);
+      db.memberSessions = sessions.filter((session) => session.token !== sessionToken);
+      await writeLocalDb(db);
+      return deleted;
+    }
+
+    const rows = await supabaseRequest("vip_member_sessions", {
+      method: "DELETE",
+      query: queryString({ select: "*", token: `eq.${sessionToken}` }),
+      headers: { Prefer: "return=representation" },
+    });
+    return rows ? rows.map(memberSessionFromRow) : [];
+  }
+
+  async function deleteMemberSessionsByMember(memberId) {
+    if (!memberId) return [];
+
+    if (!supabase) {
+      const db = await readLocalDb();
+      const sessions = db.memberSessions || [];
+      const deleted = sessions.filter((session) => session.memberId === memberId);
+      db.memberSessions = sessions.filter((session) => session.memberId !== memberId);
+      await writeLocalDb(db);
+      return deleted;
+    }
+
+    const rows = await supabaseRequest("vip_member_sessions", {
+      method: "DELETE",
+      query: queryString({ select: "*", member_id: `eq.${memberId}` }),
+      headers: { Prefer: "return=representation" },
+    });
+    return rows ? rows.map(memberSessionFromRow) : [];
+  }
+
   async function readLocalDb() {
     await ensureDatabase();
     const raw = await readFile(dbPath, "utf8");
@@ -435,6 +513,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
       perks: stored.perks || seedDatabase.perks || [],
       requests: stored.requests || seedDatabase.requests,
       pushTokens: stored.pushTokens || seedDatabase.pushTokens || [],
+      memberSessions: stored.memberSessions || seedDatabase.memberSessions || [],
     };
   }
 
@@ -704,5 +783,23 @@ function pushTokenToRow(pushToken) {
     last_registered_at: pushToken.lastRegisteredAt,
     created_at: pushToken.createdAt,
     updated_at: pushToken.updatedAt,
+  };
+}
+
+function memberSessionFromRow(row) {
+  return {
+    token: row.token,
+    memberId: row.member_id,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
+}
+
+function memberSessionToRow(session) {
+  return {
+    token: session.token,
+    member_id: session.memberId,
+    expires_at: session.expiresAt,
+    created_at: session.createdAt,
   };
 }

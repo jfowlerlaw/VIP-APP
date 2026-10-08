@@ -64,6 +64,7 @@ After at least one iPhone has enabled push notifications, open the admin dashboa
 ## Current Beta Flow
 
 - Members sign in with email plus last name, then receive a verification code.
+- Members stay signed in on the same device for about 90 days unless they log out.
 - Admins sign in with `VIP_ADMIN_PASSWORD`.
 - Admins can add VIPs, import CSV rows, publish Eventbrite links, manage member perks, and review concierge requests.
 - Member card names and concierge requests persist in Supabase when configured, otherwise in `data/vip-db.json`.
@@ -104,6 +105,8 @@ To import the existing VIP Google Sheet, export the sheet as CSV and upload it f
 Optional helpful columns are `id`, `name`, `card_name`, `phone`, `member_id`, and `joined`. If the sheet does not already have IDs, Supabase will generate them. If `name` and `card_name` are blank, Supabase will build them from `first_name` and `last_name`.
 
 The admin importer also accepts common name-header variations such as `First`, `Last`, `First Name`, and `Last Name`.
+
+Persistent member login uses the `vip_member_sessions` table in `supabase/schema.sql`. Existing Supabase projects can rerun the schema safely because the table and indexes use `if not exists`.
 
 Example:
 

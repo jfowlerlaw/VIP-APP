@@ -19,6 +19,7 @@ const adminSessions = new Map();
 const pendingClaims = new Map();
 const maxBodyBytes = 1_000_000;
 const conciergeEmail = process.env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
+const memberSessionDurationMs = 1000 * 60 * 60 * 24 * 90;
 const passwordMinLength = 8;
 const passwordHashParams = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const apnsJwtCache = {
@@ -271,7 +272,7 @@ async function handleApi(req, res, url) {
   if (route === "POST /api/logout") {
     const sessionToken = memberSessionTokenFromRequest(req);
     if (sessionToken) {
-      memberSessions.delete(sessionToken);
+      await forgetMemberSession(sessionToken);
     }
     clearCookie(res, "vip_session");
     sendJson(res, 200, { ok: true });
@@ -340,7 +341,7 @@ async function handleApi(req, res, url) {
     }
     pendingClaims.delete(String(body.claimToken || ""));
 
-    const sessionToken = createMemberSession(req, res, updatedMember.id);
+    const sessionToken = await createMemberSession(req, res, updatedMember.id);
     sendJson(res, 200, { member: publicMember(updatedMember), sessionToken });
     return;
   }
@@ -374,7 +375,7 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    const sessionToken = createMemberSession(req, res, member.id);
+    const sessionToken = await createMemberSession(req, res, member.id);
     sendJson(res, 200, { member: publicMember(member), sessionToken });
     return;
   }
@@ -652,7 +653,7 @@ async function handleAdminApi(req, res, url) {
       return;
     }
 
-    removeMemberSessions(id);
+    await removeMemberSessions(id);
     const db = await vipDb.readDb();
     sendJson(res, 200, {
       deletedMember: publicMember(result.deletedMember),
@@ -1786,10 +1787,32 @@ function lastNameFromName(name) {
 
 async function requireMember(req) {
   const sessionToken = memberSessionTokenFromRequest(req);
-  const session = sessionToken ? memberSessions.get(sessionToken) : null;
-  if (!session || session.expiresAt < Date.now()) return null;
+  if (!sessionToken) return null;
 
-  return vipDb.getMemberById(session.memberId);
+  const transientSession = memberSessions.get(sessionToken);
+  if (transientSession?.expiresAt && transientSession.expiresAt > Date.now()) {
+    return vipDb.getMemberById(transientSession.memberId);
+  }
+
+  try {
+    const session = await vipDb.getMemberSession(sessionToken);
+    const expiresAt = new Date(session?.expiresAt || 0).getTime();
+    if (!session || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+      await forgetMemberSession(sessionToken);
+      return null;
+    }
+
+    memberSessions.set(sessionToken, {
+      memberId: session.memberId,
+      expiresAt,
+    });
+
+    return vipDb.getMemberById(session.memberId);
+  } catch (error) {
+    console.warn("Member session lookup failed.", error);
+    if (!transientSession || transientSession.expiresAt < Date.now()) return null;
+    return vipDb.getMemberById(transientSession.memberId);
+  }
 }
 
 function memberSessionTokenFromRequest(req) {
@@ -1801,26 +1824,54 @@ function memberSessionTokenFromRequest(req) {
   return parseCookies(req).vip_session;
 }
 
-function createMemberSession(req, res, memberId) {
+async function createMemberSession(req, res, memberId) {
   const sessionToken = token();
+  const expiresAtDate = new Date(Date.now() + memberSessionDurationMs);
+  const createdAt = new Date().toISOString();
   memberSessions.set(sessionToken, {
     memberId,
-    expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 30,
+    expiresAt: expiresAtDate.getTime(),
   });
 
+  try {
+    await vipDb.createMemberSession({
+      token: sessionToken,
+      memberId,
+      expiresAt: expiresAtDate.toISOString(),
+      createdAt,
+    });
+  } catch (error) {
+    console.warn("Member session could not be persisted.", error);
+  }
+
   setCookie(res, "vip_session", sessionToken, {
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: Math.floor(memberSessionDurationMs / 1000),
     httpOnly: true,
     ...nativeCookieOptions(req),
   });
   return sessionToken;
 }
 
-function removeMemberSessions(memberId) {
+async function forgetMemberSession(sessionToken) {
+  memberSessions.delete(sessionToken);
+  try {
+    await vipDb.deleteMemberSession(sessionToken);
+  } catch (error) {
+    console.warn("Member session could not be deleted.", error);
+  }
+}
+
+async function removeMemberSessions(memberId) {
   for (const [sessionToken, session] of memberSessions.entries()) {
     if (session.memberId === memberId) {
       memberSessions.delete(sessionToken);
     }
+  }
+
+  try {
+    await vipDb.deleteMemberSessionsByMember(memberId);
+  } catch (error) {
+    console.warn("Member sessions could not be deleted.", error);
   }
 
   for (const [claimToken, claim] of pendingClaims.entries()) {
