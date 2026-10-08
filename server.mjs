@@ -116,7 +116,7 @@ const seedDatabase = {
       dateLabel: "Jun 18",
       timeLabel: "6:30 PM",
       location: "Orlando",
-      source: "Eventbrite",
+      source: "",
       eventbriteUrl:
         "https://www.eventbrite.com/e/second-annual-just-call-moe-celebrity-bowl-o-rama-tickets-1237735242429",
       image:
@@ -131,7 +131,7 @@ const seedDatabase = {
       dateLabel: "Jul 09",
       timeLabel: "7:00 PM",
       location: "Tampa",
-      source: "Eventbrite",
+      source: "",
       eventbriteUrl:
         "https://www.eventbrite.com/e/second-annual-just-call-moe-celebrity-bowl-o-rama-tickets-1237735242429",
       image:
@@ -183,7 +183,7 @@ const seedDatabase = {
       memberId: "mem_avery_mitchell",
       memberName: "Avery Mitchell",
       type: "Event help",
-      message: "Can you send details about the next VIP Eventbrite listing?",
+      message: "Can you send details about the next VIP event?",
       emailTo: "vip@justcallmoe.com",
       status: "Open",
       createdAt: "2026-06-05T13:00:00.000Z",
@@ -721,10 +721,10 @@ async function handleAdminApi(req, res, url) {
       copy: String(body.copy || body.eventCopy || "VIP member event.").trim(),
       city: String(body.city || body.location || body.eventLocation || "Orlando").trim(),
       dateLabel: String(body.dateLabel || body.eventDate || "TBD").trim(),
-      timeLabel: String(body.timeLabel || "Eventbrite").trim(),
+      timeLabel: String(body.timeLabel || "").trim(),
       location: String(body.location || body.eventLocation || "Orlando").trim(),
-      source: "Eventbrite",
-      eventbriteUrl: String(body.eventbriteUrl || body.eventUrl || "").trim(),
+      source: String(body.source || "").trim(),
+      eventbriteUrl: normalizeOptionalUrl(body.eventbriteUrl || body.eventUrl),
       image:
         String(body.image || "").trim() ||
         "https://justcallmoe.com/wp-content/uploads/2024/04/Just-Call-Moe-VIP-Signup-4.webp",
@@ -1641,9 +1641,11 @@ function normalizePerkAccent(accent) {
 function normalizeOptionalUrl(value) {
   const rawUrl = String(value || "").trim();
   if (!rawUrl) return "";
+  const hasProtocol = /^[a-z][a-z\d+\-.]*:/i.test(rawUrl);
+  const candidate = hasProtocol ? rawUrl : `https://${rawUrl}`;
 
   try {
-    const url = new URL(rawUrl);
+    const url = new URL(candidate);
     return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol) ? url.href : "";
   } catch (error) {
     return "";

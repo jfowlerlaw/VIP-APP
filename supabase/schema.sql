@@ -46,7 +46,7 @@ create table if not exists public.vip_events (
   date_label text not null default '',
   time_label text not null default '',
   location text not null default '',
-  source text not null default 'Eventbrite',
+  source text not null default '',
   eventbrite_url text not null default '',
   image text not null default '',
   visible boolean not null default true,
@@ -56,6 +56,9 @@ create table if not exists public.vip_events (
 
 create index if not exists vip_events_visible_created_at
   on public.vip_events (visible, created_at desc);
+
+alter table public.vip_events
+  alter column source set default '';
 
 create table if not exists public.vip_perks (
   id text primary key,

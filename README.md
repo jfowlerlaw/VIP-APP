@@ -1,6 +1,6 @@
 # Just Call Moe VIP Portal Beta
 
-This folder contains a mobile-first Just Call Moe VIP client portal and an admin dashboard. The static prototype still works, and `server.mjs` adds the first beta layer: persisted VIP records, claim-code login, admin authentication, CSV import, Eventbrite link management, and concierge requests.
+This folder contains a mobile-first Just Call Moe VIP client portal and an admin dashboard. The static prototype still works, and `server.mjs` adds the first beta layer: persisted VIP records, claim-code login, admin authentication, CSV import, event link management, and concierge requests.
 
 ## Local Beta Test
 
@@ -66,7 +66,7 @@ After at least one iPhone has enabled push notifications, open the admin dashboa
 - Members sign in with email plus last name, then receive a verification code.
 - Members stay signed in on the same device for about 90 days unless they log out.
 - Admins sign in with `VIP_ADMIN_PASSWORD`.
-- Admins can add VIPs, import CSV rows, publish Eventbrite links, manage member perks, and review concierge requests.
+- Admins can add VIPs, import CSV rows, publish event links, manage member perks, and review concierge requests.
 - Member card names and concierge requests persist in Supabase when configured, otherwise in `data/vip-db.json`.
 - Verification codes and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
 - Set `SENDGRID_API_KEY`, `VIP_FROM_EMAIL`, and `VIP_REQUEST_EMAIL` in `.env` to turn on automatic email delivery.

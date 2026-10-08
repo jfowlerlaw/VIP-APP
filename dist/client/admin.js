@@ -516,7 +516,7 @@ async function deleteMember(row) {
 async function deleteEvent(row) {
   const eventId = row.dataset.eventId;
   const eventName = row.dataset.eventName || row.querySelector("strong")?.textContent || "this event";
-  const confirmed = window.confirm(`Delete ${eventName} from the Eventbrite listings?`);
+  const confirmed = window.confirm(`Delete ${eventName} from the event listings?`);
   if (!confirmed) return;
 
   if (adminApiReady && eventId) {
@@ -1067,11 +1067,11 @@ document.querySelector("[data-event-form]")?.addEventListener("submit", async (e
       });
       renderEvents(result.events);
       renderSummary(result.summary);
-      showToast("Eventbrite link published.");
+      showToast("Event link published.");
       form.reset();
       return;
     } catch (error) {
-      showToast(error.message || "Eventbrite link could not be saved.");
+      showToast(error.message || "Event link could not be saved.");
       return;
     }
   }
@@ -1094,7 +1094,7 @@ document.querySelector("[data-event-form]")?.addEventListener("submit", async (e
 
   const metric = document.querySelector("[data-metric-events]");
   if (metric) metric.textContent = String(Number(metric.textContent) + 1);
-  showToast("Eventbrite link published.");
+  showToast("Event link published.");
 });
 
 document.querySelector("[data-add-event]")?.addEventListener("click", () => {

@@ -414,7 +414,7 @@ p {
 .perk-card button,
 .perk-card a,
 .event-copy button,
-.eventbrite-link,
+.event-link,
 .brief-link {
   display: inline-flex;
   align-items: center;
@@ -648,14 +648,14 @@ p {
   gap: 8px;
 }
 
-.eventbrite-link {
+.event-link {
   min-height: 38px;
   border: 1px solid var(--inverse);
   color: var(--inverse-text);
   background: var(--inverse);
 }
 
-.eventbrite-link:disabled {
+.event-link:disabled {
   cursor: not-allowed;
   border-color: var(--line);
   color: var(--muted);

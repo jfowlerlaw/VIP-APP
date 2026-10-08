@@ -115,7 +115,7 @@
             <article class="metric">
               <span>Event Links</span>
               <strong data-metric-events>2</strong>
-              <small>Eventbrite powered</small>
+              <small>Published invites</small>
             </article>
             <article class="metric">
               <span>Push Devices</span>
@@ -138,14 +138,14 @@
                   <span class="dot red"></span>
                   <div>
                     <strong>New concierge request</strong>
-                    <p>Avery Mitchell asked about Eventbrite access.</p>
+                    <p>Avery Mitchell asked about event access.</p>
                   </div>
                 </article>
                 <article>
                   <span class="dot blue"></span>
                   <div>
                     <strong>Event link needs review</strong>
-                    <p>Tampa VIP Party currently points to a placeholder Eventbrite URL.</p>
+                    <p>Tampa VIP Party currently points to a placeholder event URL.</p>
                   </div>
                 </article>
                 <article>
@@ -317,12 +317,12 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
           </div>
         </section>
 
-        <section class="admin-section" id="section-events" aria-label="Eventbrite event links">
+        <section class="admin-section" id="section-events" aria-label="Event links">
           <div class="editor-grid">
             <section class="panel">
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Eventbrite</p>
+                  <p class="eyebrow">Events</p>
                   <h2>Event Links</h2>
                 </div>
                 <button class="primary-button compact" type="button" data-add-event>
@@ -343,14 +343,14 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                   </thead>
                   <tbody data-event-table>
                     <tr data-event-id="evt_restaurant_night" data-event-name="VIP Restaurant Night">
-                      <td><strong>VIP Restaurant Night</strong><small data-event-url>eventbrite.com/e/second-annual...</small></td>
+                      <td><strong>VIP Restaurant Night</strong><small data-event-url>event-link.example/vip-night</small></td>
                       <td>Jun 18</td>
                       <td>Orlando</td>
                       <td><span class="status-pill active">Visible</span></td>
                       <td><button class="danger-button" type="button" data-delete-event>Delete</button></td>
                     </tr>
                     <tr data-event-id="evt_party_tampa" data-event-name="Just Call Moe Party">
-                      <td><strong>Just Call Moe Party</strong><small data-event-url>eventbrite.com/e/second-annual...</small></td>
+                      <td><strong>Just Call Moe Party</strong><small data-event-url>event-link.example/vip-party</small></td>
                       <td>Jul 09</td>
                       <td>Tampa</td>
                       <td><span class="status-pill active">Visible</span></td>
@@ -365,7 +365,7 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
               <div class="panel-header">
                 <div>
                   <p class="eyebrow">New Event</p>
-                  <h2>Eventbrite Details</h2>
+                  <h2>Event Details</h2>
                 </div>
               </div>
               <form class="stack-form" data-event-form>
@@ -374,8 +374,8 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                   <input name="eventName" value="VIP Restaurant Night">
                 </label>
                 <label>
-                  Eventbrite URL
-                  <input name="eventUrl" value="https://www.eventbrite.com/e/second-annual-just-call-moe-celebrity-bowl-o-rama-tickets-1237735242429">
+                  Event URL
+                  <input name="eventUrl" value="https://justcallmoe.com/">
                 </label>
                 <div class="two-col">
                   <label>
@@ -516,7 +516,7 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                 <span class="status-pill open">Open</span>
                 <div>
                   <strong>Avery Mitchell</strong>
-                  <p>Can you send details about the next VIP Eventbrite listing?</p>
+                  <p>Can you send details about the next VIP event?</p>
                 </div>
                 <select data-request-status>
                   <option>Open</option>

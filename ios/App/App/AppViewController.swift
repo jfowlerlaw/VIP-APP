@@ -105,6 +105,7 @@ private final class ThemedBridgeViewController: CAPBridgeViewController {
     var onThemeChange: ((String) -> Void)?
 
     private let themeMessageName = "nativeTheme"
+    private let externalLinkMessageName = "externalLink"
     private static let themeBridgeScript = """
     (function () {
       function readTheme() {
@@ -151,6 +152,7 @@ private final class ThemedBridgeViewController: CAPBridgeViewController {
     private lazy var themeMessageHandler = ThemeScriptMessageHandler { [weak self] theme in
         self?.onThemeChange?(theme)
     }
+    private lazy var externalLinkMessageHandler = ExternalLinkScriptMessageHandler()
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
@@ -160,6 +162,7 @@ private final class ThemedBridgeViewController: CAPBridgeViewController {
         }
 
         userContentController.add(themeMessageHandler, name: themeMessageName)
+        userContentController.add(externalLinkMessageHandler, name: externalLinkMessageName)
         userContentController.addUserScript(
             WKUserScript(
                 source: Self.themeBridgeScript,
@@ -171,6 +174,7 @@ private final class ThemedBridgeViewController: CAPBridgeViewController {
 
     deinit {
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: themeMessageName)
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: externalLinkMessageName)
     }
 }
 
@@ -187,5 +191,21 @@ private final class ThemeScriptMessageHandler: NSObject, WKScriptMessageHandler 
         }
 
         onThemeChange(theme)
+    }
+}
+
+private final class ExternalLinkScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard
+            let rawUrl = message.body as? String,
+            let url = URL(string: rawUrl),
+            ["http", "https", "mailto", "tel"].contains(url.scheme?.lowercased() ?? "")
+        else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url)
+        }
     }
 }

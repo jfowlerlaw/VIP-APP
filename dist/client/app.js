@@ -138,6 +138,41 @@ function apiUrl(path) {
   return path;
 }
 
+function normalizeExternalUrl(value) {
+  const rawUrl = String(value || "").trim();
+  if (!rawUrl) return "";
+
+  const hasProtocol = /^[a-z][a-z\d+\-.]*:/i.test(rawUrl);
+  const candidate = hasProtocol ? rawUrl : `https://${rawUrl}`;
+
+  try {
+    const url = new URL(candidate);
+    return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol) ? url.href : "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function openExternalUrl(event, url) {
+  const href = normalizeExternalUrl(url);
+  if (!href) return;
+
+  if (!isNativeShell()) return;
+
+  event.preventDefault();
+  try {
+    window.webkit?.messageHandlers?.externalLink?.postMessage(href);
+    return;
+  } catch (error) {
+    // Fall back to browser behavior when the native shell has not installed the bridge.
+  }
+
+  const openedWindow = window.open(href, "_blank", "noopener,noreferrer");
+  if (!openedWindow) {
+    window.location.href = href;
+  }
+}
+
 function getStoredMemberSession() {
   try {
     return localStorage.getItem(memberSessionStorageKey) || "";
@@ -646,11 +681,16 @@ function getNextEvent(events) {
   return getOrderedEvents(events)[0];
 }
 
+function genericEventMetaValue(value) {
+  const label = String(value || "").trim();
+  return /eventbrite/i.test(label) ? "" : label;
+}
+
 function updateNextInvite(events) {
   if (!nextEventTitle || !nextEventMeta || !Array.isArray(events)) return;
   if (events.length === 0) {
     nextEventTitle.textContent = "No upcoming invites";
-    nextEventMeta.textContent = "New Eventbrite listings will appear here.";
+    nextEventMeta.textContent = "New event invites will appear here.";
     return;
   }
 
@@ -659,9 +699,8 @@ function updateNextInvite(events) {
 
   const date = nextEvent.dateLabel || "Date TBD";
   const location = nextEvent.location || nextEvent.city || "Location TBD";
-  const source = nextEvent.source || "Eventbrite";
   nextEventTitle.textContent = nextEvent.title || "VIP Event";
-  nextEventMeta.textContent = `${date}, ${location} · ${source} registration`;
+  nextEventMeta.textContent = `${date}, ${location} · Tap to view details`;
 }
 
 function renderEventsUnavailable() {
@@ -671,7 +710,7 @@ function renderEventsUnavailable() {
         <div class="event-copy">
           <p class="eyebrow">Events</p>
           <h2>Invites temporarily unavailable</h2>
-          <p>Eventbrite listings could not be loaded. Please check again in a few minutes.</p>
+          <p>Event listings could not be loaded. Please check again in a few minutes.</p>
         </div>
       </article>
     `;
@@ -679,7 +718,7 @@ function renderEventsUnavailable() {
 
   if (nextEventTitle && nextEventMeta) {
     nextEventTitle.textContent = "Invites temporarily unavailable";
-    nextEventMeta.textContent = "Eventbrite listings could not be loaded.";
+    nextEventMeta.textContent = "Event listings could not be loaded.";
   }
 }
 
@@ -695,7 +734,7 @@ function renderEvents(events) {
       <div class="event-copy">
         <p class="eyebrow">Events</p>
         <h2>No upcoming invites</h2>
-        <p>New Eventbrite listings will appear here.</p>
+        <p>New event invites will appear here.</p>
       </div>
     `;
     eventsList.append(emptyState);
@@ -722,28 +761,35 @@ function renderEvents(events) {
 
     const meta = document.createElement("div");
     meta.className = "event-meta";
-    [event.dateLabel, event.timeLabel, event.source || "Eventbrite"].forEach((item) => {
+    [event.dateLabel, event.timeLabel].map(genericEventMetaValue).filter(Boolean).forEach((item) => {
       const span = document.createElement("span");
-      span.textContent = item || "TBD";
+      span.textContent = item;
       meta.append(span);
     });
+    if (!meta.children.length) {
+      const span = document.createElement("span");
+      span.textContent = "Details TBD";
+      meta.append(span);
+    }
 
     const actions = document.createElement("div");
     actions.className = "event-actions";
-    if (event.eventbriteUrl) {
+    const eventUrl = normalizeExternalUrl(event.eventbriteUrl || event.eventUrl);
+    if (eventUrl) {
       const link = document.createElement("a");
-      link.className = "eventbrite-link";
-      link.href = event.eventbriteUrl;
+      link.className = "event-link";
+      link.href = eventUrl;
       link.target = "_blank";
       link.rel = "noopener";
-      link.textContent = "Open Eventbrite";
+      link.textContent = "View event";
+      link.addEventListener("click", (clickEvent) => openExternalUrl(clickEvent, eventUrl));
       actions.append(link);
     } else {
       const button = document.createElement("button");
-      button.className = "eventbrite-link";
+      button.className = "event-link";
       button.type = "button";
       button.disabled = true;
-      button.textContent = "Eventbrite coming soon";
+      button.textContent = "Event link coming soon";
       actions.append(button);
     }
 
