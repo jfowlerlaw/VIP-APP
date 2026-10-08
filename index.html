@@ -119,11 +119,11 @@
                   <span class="fallback-icon" aria-hidden="true">P</span>
                   <span>Call VIP Line</span>
                 </a>
-                <a class="action-tile" href="mailto:vip@justcallmoe.com">
+                <button class="action-tile" type="button" data-view-shortcut="concierge" data-title="Concierge" data-focus-help-form>
                   <i data-lucide="mail" aria-hidden="true"></i>
                   <span class="fallback-icon" aria-hidden="true">M</span>
                   <span>Email VIP Desk</span>
-                </a>
+                </button>
                 <button class="action-tile" type="button" data-view-shortcut="events" data-title="Events">
                   <i data-lucide="calendar-days" aria-hidden="true"></i>
                   <span class="fallback-icon" aria-hidden="true">D</span>
@@ -256,6 +256,7 @@
                 <select id="request-type" name="request-type">
                   <option>Legal question</option>
                   <option>Event help</option>
+                  <option>Other</option>
                 </select>
 
                 <label for="request-phone">Phone number</label>
@@ -317,13 +318,6 @@
                       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
                     </div>
                   </div>
-                  <label class="setting-row">
-                    <span>
-                      <strong>Email updates</strong>
-                      <small>Perks, events, and VIP news</small>
-                    </span>
-                    <input type="checkbox" checked>
-                  </label>
                   <div class="setting-row push-row">
                     <span>
                       <strong>Push notifications</strong>

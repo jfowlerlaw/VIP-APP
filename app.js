@@ -905,6 +905,11 @@ document.querySelectorAll("[data-toast]").forEach((button) => {
 document.querySelectorAll("[data-view-shortcut]").forEach((button) => {
   button.addEventListener("click", () => {
     activateView(button.dataset.viewShortcut, button.dataset.title);
+    if (button.hasAttribute("data-focus-help-form")) {
+      window.setTimeout(() => {
+        document.querySelector("[data-concierge-form] select")?.focus();
+      }, 0);
+    }
   });
 });
 
