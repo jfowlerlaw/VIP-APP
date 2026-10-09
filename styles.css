@@ -203,15 +203,26 @@ img {
   text-align: center;
 }
 
-.loader-logo {
-  width: min(78%, 210px);
-  max-height: 76px;
-  object-fit: contain;
-  filter: drop-shadow(0 12px 18px rgba(23, 23, 23, 0.12));
+.loader-logo-plate {
+  display: grid;
+  place-items: center;
+  width: min(86%, 240px);
+  padding: 10px 14px;
+  border: 1px solid rgba(23, 23, 23, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 32px rgba(23, 23, 23, 0.14);
 }
 
-[data-theme="dark"] .loader-logo {
-  filter: brightness(1.12) drop-shadow(0 14px 22px rgba(0, 0, 0, 0.36));
+.loader-logo {
+  width: 100%;
+  max-height: 72px;
+  object-fit: contain;
+}
+
+[data-theme="dark"] .loader-logo-plate {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.4);
 }
 
 .app-loader-card h1 {
