@@ -166,6 +166,76 @@ img {
   padding: 18px 18px 8px;
 }
 
+.app-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--ink);
+  background: var(--claim-bg);
+  opacity: 1;
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+.app-loader.is-hidden {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-loader-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 280px);
+  text-align: center;
+}
+
+.app-loader-card h1 {
+  margin: 0;
+  font-size: 1.65rem;
+}
+
+.loader-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  margin-top: 8px;
+  border-radius: 28px;
+  color: #ffffff;
+  background: var(--red);
+  font-size: 2.2rem;
+  font-weight: 950;
+  box-shadow: var(--soft-shadow);
+}
+
+.loader-mark::after {
+  content: "";
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  border: 2px solid rgba(201, 31, 46, 0.28);
+  border-radius: 34px;
+  animation: loader-pulse 1.25s ease-in-out infinite;
+}
+
+@keyframes loader-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
 .claim-screen {
   position: absolute;
   inset: 0;

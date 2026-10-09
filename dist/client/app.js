@@ -7,6 +7,7 @@ const cardNameInput = document.querySelector("[data-name-input]");
 const etchedName = document.querySelector(".etched-name");
 const avatar = document.querySelector(".avatar");
 const appScreen = document.querySelector(".app-screen");
+const appLoader = document.querySelector("[data-app-loader]");
 const claimForm = document.querySelector("[data-claim-form]");
 const codeForm = document.querySelector("[data-code-form]");
 const claimMessage = document.querySelector("[data-claim-message]");
@@ -58,6 +59,7 @@ let activeMember = null;
 let betaApiReady = false;
 let toastTimer;
 let pushListenersAttached = false;
+let appLaunchFinished = false;
 
 function normalizeThemePreference(preference) {
   return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
@@ -259,6 +261,17 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     toast.classList.remove("is-visible");
   }, 2600);
+}
+
+function finishAppLaunch() {
+  if (appLaunchFinished) return;
+  appLaunchFinished = true;
+  appLoader?.classList.add("is-hidden");
+  window.setTimeout(() => {
+    if (appLaunchFinished) {
+      appLoader?.setAttribute("hidden", "");
+    }
+  }, 220);
 }
 
 function getPushPlugin() {
@@ -575,7 +588,7 @@ function findDemoMember(identity, lastName) {
   });
 }
 
-function applyMember(member) {
+function applyMember(member, options = {}) {
   activeMember = member;
   const displayName = member.cardName || member.name;
   updateMemberName(displayName);
@@ -604,7 +617,9 @@ function applyMember(member) {
     viewTitle.textContent = cardScreenTitle(member);
   }
   refreshPushStatus();
-  showToast(`Welcome back, ${displayName}.`);
+  if (options.announce !== false) {
+    showToast(`Welcome back, ${displayName}.`);
+  }
 }
 
 function resetMemberAuth() {
@@ -1256,26 +1271,21 @@ async function bootBetaApi() {
       claimMessage.textContent =
         "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
     }
+    finishAppLaunch();
     return;
   }
 
-  try {
-    const events = await apiRequest("/api/events");
-    renderEvents(events.events);
-  } catch (error) {
-    renderEventsUnavailable();
-  }
+  const eventsPromise = apiRequest("/api/events")
+    .then((events) => renderEvents(events.events))
+    .catch(() => renderEventsUnavailable());
 
-  try {
-    const perks = await apiRequest("/api/perks");
-    renderPerks(perks.perks);
-  } catch (error) {
-    renderPerksUnavailable();
-  }
+  const perksPromise = apiRequest("/api/perks")
+    .then((perks) => renderPerks(perks.perks))
+    .catch(() => renderPerksUnavailable());
 
   try {
     const session = await apiRequest("/api/me");
-    applyMember(session.member);
+    applyMember(session.member, { announce: false });
   } catch (error) {
     if (error.status === 401) {
       clearStoredMemberSession();
@@ -1283,7 +1293,11 @@ async function bootBetaApi() {
     if (claimMessage) {
       claimMessage.textContent = "Use the email address connected to your VIP membership.";
     }
+  } finally {
+    finishAppLaunch();
   }
+
+  await Promise.all([eventsPromise, perksPromise]);
 }
 
 window.addEventListener("DOMContentLoaded", () => {
