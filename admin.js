@@ -754,7 +754,7 @@ function showAdminLogin() {
   overlay.dataset.adminLogin = "true";
   overlay.innerHTML = `
     <form class="admin-login-card" data-admin-login-form>
-      <img src="https://justcallmoe.com/wp-content/uploads/2026/03/jcm-logo-opt.webp" alt="Just Call Moe">
+      <img src="assets/just-call-moe-logo.png" alt="Just Call Moe">
       <p class="eyebrow">VIP Admin</p>
       <h2>Sign In</h2>
       <label>
