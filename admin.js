@@ -351,7 +351,7 @@ function renderEvents(events) {
       <td></td>
       <td></td>
       <td><span class="status-pill"></span></td>
-      <td><button class="danger-button" type="button" data-delete-event>Delete</button></td>
+      <td><div class="row-actions"><button type="button" data-edit-event>Edit</button><button class="danger-button" type="button" data-delete-event>Delete</button></div></td>
     `;
     row.querySelector("strong").textContent = event.title || "VIP Event";
     row.querySelector("small").textContent = String(event.eventbriteUrl || "")
@@ -363,6 +363,7 @@ function renderEvents(events) {
     pill.textContent = event.visible === false ? "Hidden" : "Visible";
     pill.className = `status-pill ${event.visible === false ? "paused" : "active"}`;
     row.querySelector("[data-delete-event]").addEventListener("click", () => deleteEvent(row));
+    row.querySelector("[data-edit-event]").addEventListener("click", () => editEvent(event));
     eventTable.append(row);
   });
 }
@@ -613,7 +614,7 @@ function renderPushAdmin(payload = {}) {
   }
 
   if (pushBroadcastButton) {
-    pushBroadcastButton.disabled = !isConfigured || tokens.length === 0;
+    pushBroadcastButton.disabled = false;
   }
 
   renderPushDevices(tokens);
@@ -1051,55 +1052,93 @@ document.querySelector("[data-event-form]")?.addEventListener("submit", async (e
   const url = String(data.get("eventUrl") || "").trim();
   const date = String(data.get("eventDate") || "").trim();
   const location = String(data.get("eventLocation") || "").trim();
-  if (!name || !url || !eventTable) return;
-
-  if (adminApiReady) {
-    try {
-      const result = await apiRequest("/api/admin/events", {
-        method: "POST",
-        body: JSON.stringify({
-          title: name,
-          eventbriteUrl: url,
-          dateLabel: date,
-          location,
-          copy: String(data.get("eventCopy") || "").trim(),
-        }),
-      });
-      renderEvents(result.events);
-      renderSummary(result.summary);
-      showToast("Event link published.");
-      form.reset();
-      return;
-    } catch (error) {
-      showToast(error.message || "Event link could not be saved.");
-      return;
-    }
+  const startsAt = String(data.get("startsAt") || "");
+  const endsAt = String(data.get("endsAt") || "");
+  const resultMessage = form.querySelector("[data-event-result]");
+  const validLocalTime = (value) => {
+    if (!value) return true;
+    const parsed = new Date(value);
+    return Number.isFinite(+parsed) && new Date(+parsed - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16) === value.slice(0, 16);
+  };
+  if (![startsAt, endsAt].every(validLocalTime)) {
+    resultMessage.textContent = "Choose valid local times. A daylight-saving change may skip the time you entered.";
+    return;
   }
-
-  const row = document.createElement("tr");
-  row.dataset.eventName = name;
-  row.innerHTML = `
-    <td><strong></strong><small></small></td>
-    <td></td>
-    <td></td>
-    <td><span class="status-pill active">Visible</span></td>
-    <td><button class="danger-button" type="button" data-delete-event>Delete</button></td>
-  `;
-  row.querySelector("strong").textContent = name;
-  row.querySelector("small").textContent = url.replace(/^https?:\/\//, "").slice(0, 42);
-  row.children[1].textContent = date;
-  row.children[2].textContent = location;
-  row.querySelector("[data-delete-event]").addEventListener("click", () => deleteEvent(row));
-  eventTable.prepend(row);
-
-  const metric = document.querySelector("[data-metric-events]");
-  if (metric) metric.textContent = String(Number(metric.textContent) + 1);
-  showToast("Event link published.");
+  if (Boolean(startsAt) !== Boolean(endsAt) || (startsAt && new Date(endsAt) <= new Date(startsAt))) {
+    resultMessage.textContent = "Enter both start and end times, with the end after the start.";
+    return;
+  }
+  if (!adminApiReady) {
+    resultMessage.textContent = "Connect to the admin server before saving an event.";
+    return;
+  }
+  const button = form.querySelector("button[type='submit']");
+  const id = String(data.get("eventId") || "");
+  button.disabled = true;
+  resultMessage.textContent = "Saving event...";
+  try {
+    const result = await apiRequest(id ? `/api/admin/events/${encodeURIComponent(id)}` : "/api/admin/events", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify({
+        title: name, eventbriteUrl: url, dateLabel: date, location,
+        city: String(data.get("city") || ""), address: String(data.get("address") || ""),
+        image: String(data.get("image") || ""), copy: String(data.get("eventCopy") || "").trim(),
+        startsAt: startsAt ? new Date(startsAt).toISOString() : null,
+        endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        visible: data.has("visible"),
+      }),
+    });
+    renderEvents(result.events);
+    renderSummary(result.summary);
+    resetEventForm();
+    showToast(id ? "Event updated." : "Event published.");
+  } catch (error) {
+    resultMessage.textContent = error.message || "Event could not be saved.";
+  } finally {
+    button.disabled = false;
+  }
 });
 
 document.querySelector("[data-add-event]")?.addEventListener("click", () => {
+  resetEventForm();
   document.querySelector("[data-event-form] input[name='eventName']")?.focus();
 });
+
+function resetEventForm() {
+  const form = document.querySelector("[data-event-form]");
+  form?.reset();
+  if (form) form.elements.eventId.value = "";
+  document.querySelector("[data-event-editor-label]").textContent = "New Event";
+  document.querySelector("[data-event-submit-label]").textContent = "Publish Event";
+  document.querySelector("[data-cancel-event]").hidden = true;
+  document.querySelector("[data-event-result]").textContent = "";
+}
+
+function editEvent(event) {
+  resetEventForm();
+  const form = document.querySelector("[data-event-form]");
+  const values = { eventId: event.id, eventName: event.title, eventUrl: event.eventbriteUrl,
+    eventDate: event.dateLabel, eventLocation: event.location, city: event.city,
+    address: event.address, image: event.image, eventCopy: event.copy };
+  for (const [name, value] of Object.entries(values)) form.elements[name].value = value || "";
+  for (const name of ["startsAt", "endsAt"]) {
+    const date = new Date(event[name]);
+    form.elements[name].value = event[name] && Number.isFinite(+date)
+      ? new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+  }
+  form.elements.visible.checked = event.visible !== false;
+  document.querySelector("[data-event-editor-label]").textContent = "Edit Event";
+  document.querySelector("[data-event-submit-label]").textContent = "Save Event";
+  document.querySelector("[data-cancel-event]").hidden = false;
+  form.scrollIntoView({ block: "center", behavior: "smooth" });
+  form.elements.eventName.focus({ preventScroll: true });
+}
+
+document.querySelector("[data-cancel-event]")?.addEventListener("click", resetEventForm);
+const eventEditorZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+document.querySelector("[data-event-start-label]").textContent = `Start (${eventEditorZone})`;
+document.querySelector("[data-event-end-label]").textContent = `End (${eventEditorZone})`;
 
 document.querySelectorAll("[data-toggle-row]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -1188,7 +1227,7 @@ document.querySelector("[data-push-broadcast-form]")?.addEventListener("submit",
 
   if (pushBroadcastButton) pushBroadcastButton.disabled = true;
   if (pushBroadcastResult) {
-    pushBroadcastResult.textContent = "Sending broadcast...";
+    pushBroadcastResult.textContent = "Publishing announcement...";
     pushBroadcastResult.className = "fine-print neutral";
   }
 
@@ -1198,6 +1237,7 @@ document.querySelector("[data-push-broadcast-form]")?.addEventListener("submit",
       body: JSON.stringify({
         title: String(data.get("title") || ""),
         message: String(data.get("message") || ""),
+        actionView: String(data.get("actionView") || "events"),
       }),
     });
     const summary = result.summary || {};
@@ -1209,15 +1249,17 @@ document.querySelector("[data-push-broadcast-form]")?.addEventListener("submit",
         : result.message || "Broadcast sent.";
       pushBroadcastResult.className = failed ? "fine-print" : "fine-print neutral";
     }
-    showToast(failed ? "Broadcast sent with some failures." : "Broadcast sent.");
+    showToast(failed ? "Announcement saved; some push alerts failed." : "Announcement published.");
     await loadPushAdminStatus();
   } catch (error) {
     if (pushBroadcastResult) {
-      pushBroadcastResult.textContent = error.message || "Broadcast could not be sent.";
+      pushBroadcastResult.textContent = error.message || "Announcement could not be published.";
       pushBroadcastResult.className = "fine-print";
     }
     showToast(error.message || "Broadcast could not be sent.");
     await loadPushAdminStatus();
+  } finally {
+    if (pushBroadcastButton) pushBroadcastButton.disabled = false;
   }
 });
 

@@ -125,12 +125,14 @@
 
             <section class="view is-active" id="view-card" aria-labelledby="view-title">
               <figure class="vip-graphic-card">
-                <div class="card-art" aria-label="Digital VIP card">
+                <div class="card-art" data-interactive-card role="button" tabindex="0" aria-label="Animate your VIP card" title="Animate your VIP card">
                   <img
                     src="assets/just-call-moe-vip-card.png"
                     alt="Just Call Moe VIP Card"
                   >
                   <span class="etched-name" aria-hidden="true">Avery Mitchell</span>
+                  <span class="card-foil" aria-hidden="true"></span>
+                  <span class="card-glare" aria-hidden="true"></span>
                 </div>
               </figure>
 
@@ -153,6 +155,15 @@
               </div>
 
               <div class="vip-snapshot" aria-label="VIP snapshot">
+                <article class="snapshot-row inbox-shortcut">
+                  <i data-lucide="inbox" aria-hidden="true"></i>
+                  <div>
+                    <p class="eyebrow">Your Inbox</p>
+                    <h2 data-inbox-summary>VIP announcements</h2>
+                    <p>News, invitations, and member updates.</p>
+                  </div>
+                  <button type="button" data-view-shortcut="notifications" data-title="Inbox">Open<span class="unread-count" data-unread-count hidden>0</span></button>
+                </article>
                 <article class="snapshot-row">
                   <i data-lucide="calendar-check" aria-hidden="true"></i>
                   <div>
@@ -233,6 +244,23 @@
                     </div>
                   </div>
                 </article>
+              </div>
+            </section>
+
+            <section class="view" id="view-notifications" aria-label="Notification inbox">
+              <div class="inbox-toolbar">
+                <button class="icon-button" type="button" data-view-shortcut="card" data-title="Your Card" aria-label="Back to card" title="Back to card">
+                  <i data-lucide="arrow-left" aria-hidden="true"></i>
+                </button>
+                <button class="secondary-action" type="button" data-mark-all-read disabled>
+                  <i data-lucide="check-check" aria-hidden="true"></i>Mark all read
+                </button>
+                <button class="icon-button" type="button" data-refresh-inbox aria-label="Refresh inbox" title="Refresh inbox">
+                  <i data-lucide="refresh-cw" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div class="inbox-list" data-inbox-list aria-live="polite">
+                <p>Loading your inbox...</p>
               </div>
             </section>
 
@@ -338,6 +366,16 @@
                     <button class="setting-action text-setting-action" type="button" data-push-enable aria-pressed="false">
                       <i data-lucide="bell-ring" aria-hidden="true"></i>
                       <span data-push-label>Enable</span>
+                    </button>
+                  </div>
+                  <div class="setting-row">
+                    <span>
+                      <strong>Inbox</strong>
+                      <small>VIP announcements and invitations</small>
+                    </span>
+                    <button class="setting-action" type="button" data-view-shortcut="notifications" data-title="Inbox" aria-label="Open inbox" title="Open inbox">
+                      <i data-lucide="inbox" aria-hidden="true"></i>
+                      <span class="unread-count" data-unread-count hidden>0</span>
                     </button>
                   </div>
                   <div class="setting-row">

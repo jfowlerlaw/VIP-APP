@@ -323,7 +323,7 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
               <div class="panel-header">
                 <div>
                   <p class="eyebrow">Events</p>
-                  <h2>Event Links</h2>
+                  <h2>Events</h2>
                 </div>
                 <button class="primary-button compact" type="button" data-add-event>
                   <i data-lucide="plus" aria-hidden="true"></i>
@@ -364,37 +364,54 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
             <section class="panel">
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">New Event</p>
+                  <p class="eyebrow" data-event-editor-label>New Event</p>
                   <h2>Event Details</h2>
                 </div>
               </div>
               <form class="stack-form" data-event-form>
+                <input type="hidden" name="eventId">
                 <label>
                   Event name
-                  <input name="eventName" value="VIP Restaurant Night">
+                  <input name="eventName" required maxlength="150">
                 </label>
                 <label>
                   Event URL
-                  <input name="eventUrl" value="https://justcallmoe.com/">
+                  <input name="eventUrl" type="url" placeholder="https://">
+                </label>
+                <label>
+                  Photo URL
+                  <input name="image" type="url" placeholder="https://">
                 </label>
                 <div class="two-col">
                   <label>
-                    Date
-                    <input name="eventDate" value="Jun 18">
+                    <span data-event-start-label>Start (your local time)</span>
+                    <input name="startsAt" type="datetime-local">
                   </label>
                   <label>
-                    Location
-                    <input name="eventLocation" value="Orlando">
+                    <span data-event-end-label>End (your local time)</span>
+                    <input name="endsAt" type="datetime-local">
                   </label>
                 </div>
                 <label>
-                  Member copy
-                  <textarea name="eventCopy" rows="3">Local restaurant invite for VIP members and guests.</textarea>
+                  Date label (if time is unconfirmed)
+                  <input name="eventDate" placeholder="Date to be announced">
                 </label>
+                <div class="two-col">
+                  <label>Venue<input name="eventLocation" maxlength="200"></label>
+                  <label>City<input name="city" maxlength="160"></label>
+                </div>
+                <label>Street address<input name="address" maxlength="300" autocomplete="street-address"></label>
+                <label>
+                  Member copy
+                  <textarea name="eventCopy" rows="3" maxlength="5000"></textarea>
+                </label>
+                <label class="checkbox-label"><input name="visible" type="checkbox" checked>Visible to members</label>
                 <button class="primary-button" type="submit">
                   <i data-lucide="save" aria-hidden="true"></i>
-                  Publish Event Link
+                  <span data-event-submit-label>Publish Event</span>
                 </button>
+                <button class="ghost-button" type="button" data-cancel-event hidden>Cancel Edit</button>
+                <p class="fine-print neutral" data-event-result aria-live="polite"></p>
               </form>
             </section>
           </div>
@@ -631,23 +648,32 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
               <div class="panel-header">
                 <div>
                   <p class="eyebrow">Broadcast</p>
-                  <h2>Send To All Devices</h2>
+                  <h2>VIP Announcement</h2>
                 </div>
               </div>
               <form class="stack-form" data-push-broadcast-form>
                 <label>
                   Title
-                  <input name="title" value="Just Call Moe VIP">
+                  <input name="title" value="Just Call Moe VIP" required maxlength="80">
                 </label>
                 <label>
                   Message
-                  <textarea name="message" rows="3">You have a new VIP update from Just Call Moe.</textarea>
+                  <textarea name="message" rows="3" required maxlength="180">You have a new VIP update from Just Call Moe.</textarea>
+                </label>
+                <label>
+                  Open from announcement
+                  <select name="actionView">
+                    <option value="events">Events</option>
+                    <option value="perks">Perks</option>
+                    <option value="card">VIP card</option>
+                    <option value="concierge">Help form</option>
+                  </select>
                 </label>
                 <button class="primary-button" type="submit" data-push-broadcast-button>
                   <i data-lucide="radio" aria-hidden="true"></i>
-                  Send Broadcast
+                  Publish Announcement
                 </button>
-                <p class="fine-print neutral" data-push-broadcast-result>Send to every registered iPhone.</p>
+                <p class="fine-print neutral" data-push-broadcast-result>Saved to every member's inbox, with a push alert to enabled iPhones.</p>
               </form>
             </section>
           </div>

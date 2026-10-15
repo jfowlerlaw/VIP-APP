@@ -118,6 +118,20 @@ Morgan,Lee,Tampa,morgan@example.com,Unclaimed
 
 ## Next Production Step
 
+### Inbox, Event Details, And Interactive Card
+
+Before deploying this update, run `supabase/add_inbox_and_event_details.sql` in the Supabase SQL editor. It adds event start/end times and addresses, saved announcements, and per-member read receipts. The full `supabase/schema.sql` also includes these additions for new installations. Existing event listings remain intact.
+
+In Admin > Notifications, **Publish Announcement** saves a message to all member inboxes and sends an APNs alert to enabled iPhones when configured. Members without push permissions still receive the inbox message. Test pushes are saved only to the selected member's inbox. Old pushes sent before this update cannot be recovered.
+
+The member inbox opens from the Card screen or Profile. Opening a message marks it read; **Mark all read** clears the unread count. The inbox refreshes when opened, when the app returns to the foreground, or when a foreground push arrives. It shows the newest 200 announcements.
+
+In Admin > Events, add or edit an image URL, venue, street address, and start/end times. Date/time fields use the admin browser's displayed time zone; the server stores the exact UTC times. Confirmed times enable an **Add to Calendar** link, which exports a standard `.ics` file. Unconfirmed events keep their date label without guessing a year or duration for a calendar entry. Directions open the venue address in Maps on iPhone or Google Maps on the web.
+
+The VIP card responds to pointer/touch movement and taps. On supported phones, tapping the card requests orientation permission and then enables the tilt effect. Touch interaction still works if permission is declined or unavailable. Reduced-motion preferences disable the effect.
+
+Run `npm test` for isolated local API, inbox authorization, and calendar export checks. Run `npm run cap:sync` before opening or archiving the updated iPhone build. Deploy the Render backend after applying the SQL update, then publish the new app build.
+
 Before inviting a larger beta group, finish Supabase setup, import the VIP list, confirm verification-code login works, monitor concierge email delivery, and deploy the app to an HTTPS URL.
 
 Files:

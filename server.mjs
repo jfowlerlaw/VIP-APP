@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createSign, randomBytes, randomInt, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { createDatabase } from "./database.mjs";
+import { buildEventCalendar } from "./event-calendar.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 loadLocalEnv();
@@ -230,8 +231,9 @@ const server = createServer(async (req, res) => {
 await vipDb.ensureDatabase();
 
 server.listen(port, host, () => {
-  console.log(`VIP beta server running at http://127.0.0.1:${port}/index.html`);
-  console.log(`Admin dashboard available at http://127.0.0.1:${port}/admin.html`);
+  const listeningPort = server.address().port;
+  console.log(`VIP beta server running at http://127.0.0.1:${listeningPort}/index.html`);
+  console.log(`Admin dashboard available at http://127.0.0.1:${listeningPort}/admin.html`);
   if (host !== "127.0.0.1") {
     console.log(`Network host enabled on ${host}:${port}`);
   }
@@ -250,6 +252,52 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       events: await vipDb.listEvents({ visibleOnly: true }),
     });
+    return;
+  }
+
+  const calendarMatch = url.pathname.match(/^\/api\/events\/([^/]+)\/calendar\.ics$/);
+  if (req.method === "GET" && calendarMatch) {
+    const event = (await vipDb.listEvents({ visibleOnly: true })).find((item) => item.id === decodeURIComponent(calendarMatch[1]));
+    if (!event) {
+      sendJson(res, 404, { message: "Event not found." });
+      return;
+    }
+    let calendar;
+    try {
+      calendar = buildEventCalendar(event);
+    } catch (error) {
+      sendJson(res, 400, { message: error.message });
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="vip-event.ics"',
+      "Cache-Control": "no-store",
+    });
+    res.end(calendar);
+    return;
+  }
+
+  if (route === "GET /api/notifications" || route === "POST /api/notifications/read-all" ||
+      (req.method === "PATCH" && /^\/api\/notifications\/[^/]+\/read$/.test(url.pathname))) {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Not signed in" });
+      return;
+    }
+    const notifications = await vipDb.listNotifications(member.id);
+    if (req.method !== "GET") {
+      const id = req.method === "PATCH" ? decodeURIComponent(url.pathname.split("/")[3]) : null;
+      const selected = id ? notifications.filter((item) => item.id === id) : notifications;
+      if (id && !selected.length) {
+        sendJson(res, 404, { message: "Notification not found." });
+        return;
+      }
+      await vipDb.markNotificationsRead(member.id, selected.filter((item) => !item.readAt).map((item) => item.id));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    sendJson(res, 200, { notifications: notifications.map(({ memberId, ...item }) => item) });
     return;
   }
 
@@ -715,21 +763,13 @@ async function handleAdminApi(req, res, url) {
 
   if (route === "POST /api/admin/events") {
     const body = await readJsonBody(req);
-    const event = {
-      id: `evt_${Date.now()}_${randomBytes(3).toString("hex")}`,
-      title: String(body.title || body.eventName || "VIP Event").trim(),
-      copy: String(body.copy || body.eventCopy || "VIP member event.").trim(),
-      city: String(body.city || body.location || body.eventLocation || "Orlando").trim(),
-      dateLabel: String(body.dateLabel || body.eventDate || "TBD").trim(),
-      timeLabel: String(body.timeLabel || "").trim(),
-      location: String(body.location || body.eventLocation || "Orlando").trim(),
-      source: String(body.source || "").trim(),
-      eventbriteUrl: normalizeOptionalUrl(body.eventbriteUrl || body.eventUrl),
-      image:
-        String(body.image || "").trim() ||
-        "https://justcallmoe.com/wp-content/uploads/2024/04/Just-Call-Moe-VIP-Signup-4.webp",
-      visible: true,
-    };
+    let event;
+    try {
+      event = { ...normalizeEventDetails(body), id: `evt_${randomUUID()}` };
+    } catch (error) {
+      sendJson(res, 400, { message: error.message });
+      return;
+    }
     const storedEvent = await vipDb.createEvent(event);
     const db = await vipDb.readDb();
     sendJson(res, 201, {
@@ -737,6 +777,26 @@ async function handleAdminApi(req, res, url) {
       events: db.events,
       summary: buildSummary(db),
     });
+    return;
+  }
+
+  if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/events/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/admin/events/", ""));
+    const current = (await vipDb.listEvents()).find((item) => item.id === id);
+    if (!current) {
+      sendJson(res, 404, { message: "Event not found." });
+      return;
+    }
+    let event;
+    try {
+      event = normalizeEventDetails({ ...current, ...await readJsonBody(req) });
+    } catch (error) {
+      sendJson(res, 400, { message: error.message });
+      return;
+    }
+    const storedEvent = await vipDb.updateEvent(id, { ...event, id });
+    const db = await vipDb.readDb();
+    sendJson(res, 200, { event: storedEvent, events: db.events, summary: buildSummary(db) });
     return;
   }
 
@@ -878,6 +938,8 @@ async function handleAdminApi(req, res, url) {
       body.message || body.body,
       "This is a test notification from the VIP admin portal.",
     );
+    const notification = createAnnouncement(title, message, body.actionView, targetToken.memberId);
+    await vipDb.createNotification(notification);
 
     let result;
     try {
@@ -887,6 +949,7 @@ async function handleAdminApi(req, res, url) {
         body: message,
         data: {
           view: "events",
+          notificationId: notification.id,
           source: "admin-test",
         },
       });
@@ -915,16 +978,23 @@ async function handleAdminApi(req, res, url) {
       apns: apnsStatus,
       token: publicToken,
       result,
+      notificationId: notification.id,
     });
     return;
   }
 
   if (route === "POST /api/admin/push/broadcast") {
     const body = await readJsonBody(req);
+    const title = normalizePushTitle(body.title);
+    const message = normalizePushMessage(body.message || body.body, "You have a new VIP update from Just Call Moe.");
+    const notification = createAnnouncement(title, message, body.actionView);
+    await vipDb.createNotification(notification);
     const apnsStatus = apnsSetupStatus();
     if (!apnsStatus.configured) {
-      sendJson(res, 400, {
-        message: `APNs is missing: ${apnsStatus.missing.join(", ")}.`,
+      sendJson(res, 200, {
+        message: "Announcement saved to member inboxes. Push delivery is unavailable until APNs is configured.",
+        notificationId: notification.id,
+        summary: { requested: 0, sent: 0, failed: 0 },
         apns: apnsStatus,
       });
       return;
@@ -935,15 +1005,15 @@ async function handleAdminApi(req, res, url) {
     );
 
     if (targets.length === 0) {
-      sendJson(res, 404, { message: "No enabled iPhone push tokens are available yet.", apns: apnsStatus });
+      sendJson(res, 200, {
+        message: "Announcement saved to member inboxes. No iPhones have push enabled yet.",
+        notificationId: notification.id,
+        summary: { requested: 0, sent: 0, failed: 0 },
+        apns: apnsStatus,
+      });
       return;
     }
 
-    const title = normalizePushTitle(body.title);
-    const message = normalizePushMessage(
-      body.message || body.body,
-      "You have a new VIP update from Just Call Moe.",
-    );
     const deliveries = [];
     const failures = [];
 
@@ -956,6 +1026,7 @@ async function handleAdminApi(req, res, url) {
           body: message,
           data: {
             view: "events",
+            notificationId: notification.id,
             source: "admin-broadcast",
           },
         });
@@ -985,7 +1056,8 @@ async function handleAdminApi(req, res, url) {
     }
 
     sendJson(res, 200, {
-      message: `Broadcast complete: ${deliveries.length} sent, ${failures.length} failed.`,
+      message: `Announcement saved to member inboxes. Push: ${deliveries.length} sent, ${failures.length} failed.`,
+      notificationId: notification.id,
       apns: apnsStatus,
       summary: {
         requested: targets.length,
@@ -1088,6 +1160,46 @@ function selectPushTestToken(tokens, tokenId) {
   }
 
   return iosTokens[0] || null;
+}
+
+function createAnnouncement(title, body, actionView, memberId = null) {
+  return {
+    id: `notice_${randomUUID()}`, title, body, memberId,
+    actionView: ["events", "perks", "card", "concierge"].includes(actionView) ? actionView : "events",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function normalizeEventDetails(body) {
+  const startsAt = body.startsAt ? new Date(body.startsAt) : null;
+  const endsAt = body.endsAt ? new Date(body.endsAt) : null;
+  if (Boolean(startsAt) !== Boolean(endsAt) ||
+      (startsAt && (!Number.isFinite(+startsAt) || !Number.isFinite(+endsAt) || endsAt <= startsAt))) {
+    throw new Error("Enter a valid start and end time. The end must be after the start.");
+  }
+  const timeZone = String(body.timeZone || "America/New_York");
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+  } catch {
+    throw new Error("Choose a valid event time zone.");
+  }
+  const image = normalizeOptionalUrl(body.image);
+  if (body.image && (!image || !/^https?:\/\//i.test(image))) {
+    throw new Error("The event photo must be an http or https image URL.");
+  }
+  return {
+    title: String(body.title || body.eventName || "VIP Event").trim().slice(0, 150),
+    copy: String(body.copy || body.eventCopy || "").trim().slice(0, 5000),
+    city: String(body.city || body.location || body.eventLocation || "").trim().slice(0, 160),
+    dateLabel: startsAt ? new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric", year: "numeric" }).format(startsAt) : String(body.dateLabel || body.eventDate || "Date TBD").slice(0, 100),
+    timeLabel: startsAt ? new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(startsAt) : String(body.timeLabel || "").slice(0, 100),
+    location: String(body.location || body.eventLocation || "").trim().slice(0, 200),
+    address: String(body.address || "").trim().slice(0, 300),
+    source: String(body.source || "").trim(),
+    eventbriteUrl: normalizeOptionalUrl(body.eventbriteUrl || body.eventUrl),
+    image, visible: body.visible !== false,
+    startsAt: startsAt?.toISOString() || null, endsAt: endsAt?.toISOString() || null, timeZone,
+  };
 }
 
 function normalizePushTitle(value, fallback = "Just Call Moe VIP") {

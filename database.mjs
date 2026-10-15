@@ -19,7 +19,11 @@ export function createDatabase({ rootDir, seedDatabase }) {
     deleteMember,
     listEvents,
     createEvent,
+    updateEvent,
     deleteEvent,
+    listNotifications,
+    createNotification,
+    markNotificationsRead,
     listPerks,
     createPerk,
     updatePerk,
@@ -146,6 +150,8 @@ export function createDatabase({ rootDir, seedDatabase }) {
       db.requests = db.requests.filter((request) => request.memberId !== id);
       db.pushTokens = (db.pushTokens || []).filter((pushToken) => pushToken.memberId !== id);
       db.memberSessions = (db.memberSessions || []).filter((session) => session.memberId !== id);
+      db.notifications = (db.notifications || []).filter((item) => item.memberId !== id);
+      db.notificationReads = (db.notificationReads || []).filter((item) => item.memberId !== id);
       await writeLocalDb(db);
 
       return {
@@ -221,6 +227,89 @@ export function createDatabase({ rootDir, seedDatabase }) {
       headers: { Prefer: "return=representation" },
     });
     return rows[0] ? eventFromRow(rows[0]) : null;
+  }
+
+  async function updateEvent(id, event) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      const stored = db.events.find((item) => item.id === id);
+      if (!stored) return null;
+      Object.assign(stored, event, { id });
+      await writeLocalDb(db);
+      return stored;
+    }
+    const { id: ignored, ...body } = eventToRow(event);
+    const rows = await supabaseRequest("vip_events", {
+      method: "PATCH",
+      query: queryString({ id: `eq.${id}` }),
+      body,
+      headers: { Prefer: "return=representation" },
+    });
+    return rows[0] ? eventFromRow(rows[0]) : null;
+  }
+
+  async function listNotifications(memberId) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      return (db.notifications || [])
+        .filter((item) => !item.memberId || item.memberId === memberId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 200)
+        .map((item) => ({ ...item, readAt: (db.notificationReads || []).find(
+          (read) => read.memberId === memberId && read.notificationId === item.id,
+        )?.readAt || null }));
+    }
+    const quotedMemberId = `"${String(memberId).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    const rows = await supabaseRequest("vip_notifications", {
+      query: queryString({
+        select: "*,vip_notification_reads(read_at)",
+        or: `(member_id.is.null,member_id.eq.${quotedMemberId})`,
+        "vip_notification_reads.member_id": `eq.${quotedMemberId}`,
+        order: "created_at.desc", limit: "200",
+      }),
+    });
+    return rows.map((row) => ({
+      id: row.id, title: row.title, body: row.body, actionView: row.action_view,
+      memberId: row.member_id, createdAt: row.created_at, readAt: row.vip_notification_reads?.[0]?.read_at || null,
+    }));
+  }
+
+  async function createNotification(notification) {
+    if (!supabase) {
+      const db = await readLocalDb();
+      db.notifications ||= [];
+      db.notifications.unshift(notification);
+      await writeLocalDb(db);
+      return notification;
+    }
+    await supabaseRequest("vip_notifications", {
+      method: "POST",
+      body: { id: notification.id, title: notification.title, body: notification.body,
+        member_id: notification.memberId || null, action_view: notification.actionView,
+        created_at: notification.createdAt },
+    });
+    return notification;
+  }
+
+  async function markNotificationsRead(memberId, notificationIds) {
+    if (!notificationIds.length) return;
+    const readAt = new Date().toISOString();
+    if (!supabase) {
+      const db = await readLocalDb();
+      db.notificationReads ||= [];
+      for (const notificationId of notificationIds) {
+        if (!db.notificationReads.some((read) => read.memberId === memberId && read.notificationId === notificationId)) {
+          db.notificationReads.push({ memberId, notificationId, readAt });
+        }
+      }
+      await writeLocalDb(db);
+      return;
+    }
+    await supabaseRequest("vip_notification_reads", {
+      method: "POST",
+      body: notificationIds.map((notificationId) => ({ notification_id: notificationId, member_id: memberId, read_at: readAt })),
+      headers: { Prefer: "resolution=ignore-duplicates" },
+    });
   }
 
   async function listPerks({ visibleOnly = false } = {}) {
@@ -659,6 +748,10 @@ function eventFromRow(row) {
     eventbriteUrl: row.eventbrite_url,
     image: row.image,
     visible: row.visible,
+    startsAt: row.starts_at || null,
+    endsAt: row.ends_at || null,
+    timeZone: row.time_zone || "America/New_York",
+    address: row.address || "",
   };
 }
 
@@ -675,6 +768,10 @@ function eventToRow(event) {
     eventbrite_url: event.eventbriteUrl,
     image: event.image,
     visible: event.visible !== false,
+    starts_at: event.startsAt || null,
+    ends_at: event.endsAt || null,
+    time_zone: event.timeZone || "America/New_York",
+    address: event.address || "",
   };
 }
 

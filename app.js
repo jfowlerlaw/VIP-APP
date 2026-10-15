@@ -8,6 +8,8 @@ const etchedName = document.querySelector(".etched-name");
 const avatar = document.querySelector(".avatar");
 const appScreen = document.querySelector(".app-screen");
 const appLoader = document.querySelector("[data-app-loader]");
+const inboxList = document.querySelector("[data-inbox-list]");
+const markAllReadButton = document.querySelector("[data-mark-all-read]");
 const claimForm = document.querySelector("[data-claim-form]");
 const codeForm = document.querySelector("[data-code-form]");
 const claimMessage = document.querySelector("[data-claim-message]");
@@ -60,6 +62,12 @@ let betaApiReady = false;
 let toastTimer;
 let pushListenersAttached = false;
 let appLaunchFinished = false;
+let inboxNotifications = [];
+let inboxRequestId = 0;
+let pendingNotificationId = null;
+let inboxLoading = false;
+let inboxLoaded = false;
+let inboxError = false;
 
 function normalizeThemePreference(preference) {
   return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
@@ -163,8 +171,11 @@ function openExternalUrl(event, url) {
 
   event.preventDefault();
   try {
-    window.webkit?.messageHandlers?.externalLink?.postMessage(href);
-    return;
+    const handler = window.webkit?.messageHandlers?.externalLink;
+    if (handler) {
+      handler.postMessage(href);
+      return;
+    }
   } catch (error) {
     // Fall back to browser behavior when the native shell has not installed the bridge.
   }
@@ -387,11 +398,15 @@ function attachPushListeners() {
 
   pushPlugin.addListener("pushNotificationReceived", (notification) => {
     showToast(notification?.title || "New VIP notification received.");
+    loadInbox();
   });
 
   pushPlugin.addListener("pushNotificationActionPerformed", (action) => {
     const targetView = action?.notification?.data?.view;
-    if (targetView === "events") {
+    if (targetView === "notifications" || action?.notification?.data?.notificationId) {
+      pendingNotificationId = action?.notification?.data?.notificationId || null;
+      if (activeMember) activateView("notifications", "Inbox");
+    } else if (targetView === "events" && activeMember) {
       activateView("events", "Events");
     }
   });
@@ -538,6 +553,7 @@ function activateView(target, title) {
   if (viewTitle) {
     viewTitle.textContent = target === "card" ? cardScreenTitle() : title;
   }
+  if (target === "notifications" && activeMember) loadInbox();
 }
 
 function updateMemberName(name) {
@@ -617,6 +633,8 @@ function applyMember(member, options = {}) {
     viewTitle.textContent = cardScreenTitle(member);
   }
   refreshPushStatus();
+  if (pendingNotificationId) activateView("notifications", "Inbox");
+  else loadInbox();
   if (options.announce !== false) {
     showToast(`Welcome back, ${displayName}.`);
   }
@@ -627,6 +645,14 @@ function resetMemberAuth() {
   pendingMember = null;
   pendingClaim = null;
   clearStoredMemberSession();
+  inboxRequestId += 1;
+  inboxNotifications = [];
+  pendingNotificationId = null;
+  inboxLoading = false;
+  inboxLoaded = false;
+  inboxError = false;
+  inboxList?.removeAttribute("aria-busy");
+  renderInbox();
 
   appScreen?.classList.remove("is-authenticated");
   document.querySelector("[data-auth-screen]")?.removeAttribute("hidden");
@@ -655,6 +681,7 @@ function resetMemberAuth() {
 }
 
 function parseEventDate(event) {
+  if (event.startsAt && Number.isFinite(Date.parse(event.startsAt))) return new Date(event.startsAt);
   const dateLabel = String(event.dateLabel || "").trim();
   const monthMatch = dateLabel.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})/i);
   if (!monthMatch) return null;
@@ -693,7 +720,7 @@ function getOrderedEvents(events) {
 }
 
 function getNextEvent(events) {
-  return getOrderedEvents(events)[0];
+  return getOrderedEvents(events).find((event) => !event.endsAt || Date.parse(event.endsAt) >= Date.now());
 }
 
 function genericEventMetaValue(value) {
@@ -710,13 +737,144 @@ function updateNextInvite(events) {
   }
 
   const nextEvent = getNextEvent(events);
-  if (!nextEvent) return;
+  if (!nextEvent) {
+    nextEventTitle.textContent = "No upcoming invites";
+    nextEventMeta.textContent = "New event invites will appear here.";
+    return;
+  }
 
   const date = nextEvent.dateLabel || "Date TBD";
   const location = nextEvent.location || nextEvent.city || "Location TBD";
   nextEventTitle.textContent = nextEvent.title || "VIP Event";
   nextEventMeta.textContent = `${date}, ${location} · Tap to view details`;
 }
+
+function updateInboxBadges() {
+  const unread = inboxNotifications.filter((item) => !item.readAt).length;
+  document.querySelectorAll("[data-unread-count]").forEach((badge) => {
+    badge.textContent = unread > 99 ? "99+" : String(unread);
+    badge.hidden = unread === 0;
+    badge.setAttribute("aria-label", `${unread} unread announcements`);
+  });
+  const summary = document.querySelector("[data-inbox-summary]");
+  if (summary) summary.textContent = !inboxLoaded
+    ? (inboxError ? "Inbox unavailable" : "VIP announcements")
+    : (unread ? `${unread} unread ${unread === 1 ? "announcement" : "announcements"}` : "You're all caught up");
+  if (markAllReadButton) markAllReadButton.disabled = !unread || inboxLoading;
+}
+
+function renderInbox() {
+  if (!inboxList) return;
+  const expanded = new Set([...inboxList.querySelectorAll("details[open]")].map((item) => item.dataset.notificationId));
+  inboxList.replaceChildren();
+  updateInboxBadges();
+  if (!inboxNotifications.length) {
+    inboxList.innerHTML = '<div class="inbox-empty"><i data-lucide="inbox" aria-hidden="true"></i><h2>No announcements yet</h2><p>Your VIP news and invitations will appear here.</p></div>';
+  }
+  for (const notification of inboxNotifications) {
+    const item = document.createElement("details");
+    item.className = `inbox-message${notification.readAt ? "" : " is-unread"}`;
+    item.dataset.notificationId = notification.id;
+    const heading = document.createElement("summary");
+    const title = document.createElement("strong");
+    title.textContent = notification.title;
+    const time = document.createElement("time");
+    time.dateTime = notification.createdAt;
+    time.textContent = new Date(notification.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const state = document.createElement("span");
+    state.className = "notification-state";
+    state.dataset.readState = "";
+    state.textContent = notification.readAt ? "Read" : "New";
+    heading.append(title, time, state);
+    const body = document.createElement("div");
+    body.className = "inbox-message-body";
+    const message = document.createElement("p");
+    message.textContent = notification.body;
+    body.append(message);
+    const actionTitles = { events: "View events", perks: "View perks", card: "Your VIP card", concierge: "Contact VIP desk" };
+    if (actionTitles[notification.actionView]) {
+      const button = document.createElement("button");
+      button.className = "secondary-action";
+      button.type = "button";
+      button.textContent = actionTitles[notification.actionView];
+      button.addEventListener("click", () => activateView(notification.actionView, { events: "Events", perks: "VIP Perks", concierge: "Concierge" }[notification.actionView]));
+      body.append(button);
+    }
+    item.append(heading, body);
+    item.addEventListener("toggle", () => {
+      if (item.open && !notification.readAt) markNotificationRead(notification, item);
+    });
+    item.open = expanded.has(notification.id) || pendingNotificationId === notification.id;
+    inboxList.append(item);
+  }
+  pendingNotificationId = null;
+  window.lucide?.createIcons();
+}
+
+async function loadInbox() {
+  if (!activeMember || !betaApiReady) return;
+  const requestId = ++inboxRequestId;
+  inboxLoading = true;
+  inboxList?.setAttribute("aria-busy", "true");
+  updateInboxBadges();
+  try {
+    const result = await apiRequest("/api/notifications");
+    if (requestId !== inboxRequestId) return;
+    inboxNotifications = Array.isArray(result.notifications) ? result.notifications : [];
+    inboxLoaded = true;
+    inboxError = false;
+    renderInbox();
+  } catch (error) {
+    if (requestId !== inboxRequestId) return;
+    inboxError = true;
+    if (inboxList && !inboxNotifications.length) {
+      inboxList.innerHTML = '<div class="inbox-empty"><h2>Inbox unavailable</h2><p>Your announcements could not be loaded. Please try refreshing.</p></div>';
+    } else {
+      showToast("Inbox could not be refreshed.");
+    }
+  } finally {
+    if (requestId === inboxRequestId) {
+      inboxLoading = false;
+      inboxList?.removeAttribute("aria-busy");
+      updateInboxBadges();
+    }
+  }
+}
+
+async function markNotificationRead(notification, item) {
+  const memberId = activeMember?.id;
+  try {
+    await apiRequest(`/api/notifications/${encodeURIComponent(notification.id)}/read`, { method: "PATCH" });
+    if (activeMember?.id !== memberId) return;
+    notification.readAt = new Date().toISOString();
+    const current = inboxNotifications.find((entry) => entry.id === notification.id);
+    if (current) current.readAt = notification.readAt;
+    item.classList.remove("is-unread");
+    item.querySelector("[data-read-state]").textContent = "Read";
+    updateInboxBadges();
+  } catch (error) {
+    if (activeMember?.id === memberId) showToast("Could not mark this announcement as read. Please try again.");
+  }
+}
+
+document.querySelector("[data-refresh-inbox]")?.addEventListener("click", loadInbox);
+markAllReadButton?.addEventListener("click", async () => {
+  const memberId = activeMember?.id;
+  markAllReadButton.disabled = true;
+  try {
+    await apiRequest("/api/notifications/read-all", { method: "POST" });
+    if (activeMember?.id !== memberId) return;
+    inboxNotifications.forEach((item) => { item.readAt ||= new Date().toISOString(); });
+    renderInbox();
+  } catch (error) {
+    if (activeMember?.id === memberId) showToast("Could not mark announcements as read.");
+  } finally {
+    updateInboxBadges();
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) loadInbox();
+});
 
 function renderEventsUnavailable() {
   if (eventsList) {
@@ -760,6 +918,21 @@ function renderEvents(events) {
   orderedEvents.forEach((event) => {
     const article = document.createElement("article");
     article.className = "event-card";
+    const imageUrl = normalizeExternalUrl(event.image);
+    if (/^https?:\/\//i.test(imageUrl)) {
+      const media = document.createElement("div");
+      media.className = "event-media is-loading";
+      media.innerHTML = '<i data-lucide="image" aria-hidden="true"></i>';
+      const photo = document.createElement("img");
+      photo.className = "event-photo";
+      photo.src = imageUrl;
+      photo.alt = event.title || "VIP event";
+      photo.loading = "lazy";
+      photo.addEventListener("load", () => media.classList.remove("is-loading"), { once: true });
+      photo.addEventListener("error", () => media.remove(), { once: true });
+      media.append(photo);
+      article.append(media);
+    }
 
     const copy = document.createElement("div");
     copy.className = "event-copy";
@@ -808,12 +981,40 @@ function renderEvents(events) {
       actions.append(button);
     }
 
-    copy.append(eyebrow, title, description, meta, actions);
+    const venue = document.createElement("p");
+    venue.className = "event-address";
+    venue.textContent = [event.location, event.address].filter(Boolean).join(" · ");
+
+    const detailsActions = document.createElement("div");
+    detailsActions.className = "event-detail-actions";
+    const addDetailLink = (label, icon, href) => {
+      const link = document.createElement("a");
+      link.className = "secondary-action";
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>`;
+      link.append(document.createTextNode(label));
+      link.addEventListener("click", (clickEvent) => openExternalUrl(clickEvent, href));
+      detailsActions.append(link);
+    };
+    if (event.startsAt && event.endsAt && Date.parse(event.endsAt) > Date.parse(event.startsAt)) {
+      addDetailLink("Add to Calendar", "calendar-plus", apiUrl(`/api/events/${encodeURIComponent(event.id)}/calendar.ics`));
+    }
+    const destination = event.address || [...new Set([event.location, event.city].filter(Boolean))].join(", ");
+    if (destination) {
+      const directions = isNativeShell()
+        ? `https://maps.apple.com/?daddr=${encodeURIComponent(destination)}`
+        : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+      addDetailLink("Directions", "map-pin", directions);
+    }
+    copy.append(eyebrow, title, description, meta, venue, detailsActions, actions);
     article.append(copy);
     eventsList.append(article);
   });
 
   updateNextInvite(orderedEvents);
+  window.lucide?.createIcons();
 }
 
 function renderPerksUnavailable() {
@@ -1300,11 +1501,92 @@ async function bootBetaApi() {
   await Promise.all([eventsPromise, perksPromise]);
 }
 
+function setupInteractiveCard() {
+  const card = document.querySelector("[data-interactive-card]");
+  if (!card) return;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let frame;
+  let resetTimer;
+  let sensorEnabled = false;
+  let sensorRequested = false;
+  let baseline = null;
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const move = (x, y) => {
+    if (reducedMotion.matches || document.hidden || !activeMember || !document.querySelector("#view-card.is-active")) return;
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      card.style.setProperty("--card-x", `${clamp(x, -1, 1) * 5}deg`);
+      card.style.setProperty("--card-y", `${clamp(y, -1, 1) * -5}deg`);
+      card.style.setProperty("--shine-x", `${50 + clamp(x, -1, 1) * 40}%`);
+      card.style.setProperty("--shine-y", `${50 + clamp(y, -1, 1) * 40}%`);
+      card.classList.add("is-interacting");
+    });
+  };
+  const reset = () => {
+    cancelAnimationFrame(frame);
+    card.classList.remove("is-interacting");
+    card.style.removeProperty("--card-x");
+    card.style.removeProperty("--card-y");
+    baseline = null;
+  };
+  card.addEventListener("pointermove", (event) => {
+    const rect = card.getBoundingClientRect();
+    move((event.clientX - rect.left) / rect.width * 2 - 1, (event.clientY - rect.top) / rect.height * 2 - 1);
+  }, { passive: true });
+  card.addEventListener("pointerleave", reset);
+  card.addEventListener("pointercancel", reset);
+  card.addEventListener("pointerup", () => {
+    window.clearTimeout(resetTimer);
+    resetTimer = window.setTimeout(reset, 800);
+  });
+  const orientation = (event) => {
+    if (document.hidden || reducedMotion.matches || !activeMember || !document.querySelector("#view-card.is-active")) {
+      baseline = null;
+      return;
+    }
+    if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+    baseline ||= { beta: event.beta, gamma: event.gamma };
+    move((event.gamma - baseline.gamma) / 24, (event.beta - baseline.beta) / 24);
+  };
+  const enableSensor = async () => {
+    if (sensorRequested || reducedMotion.matches || !window.DeviceOrientationEvent) return;
+    sensorRequested = true;
+    try {
+      const requestPermission = window.DeviceOrientationEvent.requestPermission;
+      if (typeof requestPermission === "function" && await requestPermission.call(window.DeviceOrientationEvent) !== "granted") return;
+      if (!sensorEnabled) {
+        window.addEventListener("deviceorientation", orientation, { passive: true });
+        sensorEnabled = true;
+      }
+    } catch {
+      // Touch and pointer effects remain available when motion permission is unavailable.
+    }
+  };
+  const animate = () => {
+    if (reducedMotion.matches) return;
+    move(-0.65, 0.35);
+    window.clearTimeout(resetTimer);
+    resetTimer = window.setTimeout(reset, 1100);
+    enableSensor();
+  };
+  card.addEventListener("click", animate);
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      animate();
+    }
+  });
+  document.addEventListener("visibilitychange", reset);
+  reducedMotion.addEventListener("change", reset);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   if (window.lucide) {
     window.lucide.createIcons();
     document.documentElement.classList.add("icons-ready");
   }
   updatePushSetting();
+  attachPushListeners();
+  setupInteractiveCard();
   bootBetaApi();
 });

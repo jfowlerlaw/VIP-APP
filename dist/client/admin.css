@@ -569,6 +569,22 @@ td small {
   resize: vertical;
 }
 
+.stack-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stack-form input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+}
+
+[data-cancel-event][hidden] {
+  display: none;
+}
+
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;

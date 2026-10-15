@@ -518,11 +518,11 @@ p {
 .vip-graphic-card {
   width: 100%;
   margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
+  overflow: visible;
+  border: 0;
   border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--soft-shadow);
+  background: transparent;
+  perspective: 900px;
 }
 
 .card-art {
@@ -531,6 +531,60 @@ p {
   overflow: hidden;
   border-radius: var(--radius);
   background: var(--card-art-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--soft-shadow);
+  cursor: pointer;
+  transform: rotateX(var(--card-y, 0deg)) rotateY(var(--card-x, 0deg));
+  transition: transform 350ms ease, box-shadow 350ms ease;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card-art:focus-visible {
+  outline: 3px solid var(--red);
+  outline-offset: 4px;
+}
+
+.card-art.is-interacting {
+  transition-duration: 100ms;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.2);
+}
+
+.card-foil,
+.card-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.card-foil {
+  background: linear-gradient(115deg, transparent 20%, rgba(119, 204, 232, 0.24) 35%, rgba(255, 242, 181, 0.34) 48%, rgba(235, 157, 194, 0.22) 60%, transparent 76%);
+  background-size: 250% 250%;
+  background-position: var(--shine-x, 50%) var(--shine-y, 50%);
+  mix-blend-mode: screen;
+}
+
+.card-glare {
+  background: radial-gradient(ellipse at var(--shine-x, 50%) var(--shine-y, 50%), rgba(255, 255, 255, 0.19), transparent 65%);
+}
+
+.is-interacting .card-foil,
+.is-interacting .card-glare {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-art,
+  .card-art.is-interacting {
+    transform: none;
+    transition: none;
+  }
+  .card-foil,
+  .card-glare {
+    display: none;
+  }
 }
 
 .vip-graphic-card img {
@@ -769,6 +823,183 @@ p {
   min-height: 0;
   margin-bottom: 0;
   overflow: hidden;
+}
+
+.event-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--field);
+}
+
+.event-media > svg {
+  position: absolute;
+  inset: 0;
+  width: 28px;
+  height: 28px;
+  margin: auto;
+  color: var(--muted);
+}
+
+.event-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--field);
+  opacity: 1;
+}
+
+.is-loading .event-photo {
+  opacity: 0;
+}
+
+.event-address {
+  overflow-wrap: anywhere;
+}
+
+.event-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.event-detail-actions a {
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+}
+
+.event-detail-actions svg,
+.inbox-toolbar svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.inbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.inbox-toolbar .secondary-action {
+  min-width: 0;
+  padding: 0 10px;
+  font-size: 0.76rem;
+}
+
+.inbox-list {
+  display: grid;
+  gap: 12px;
+}
+
+.inbox-message {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.inbox-message.is-unread {
+  border-left: 3px solid var(--red);
+}
+
+.inbox-message summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.inbox-message summary::-webkit-details-marker {
+  display: none;
+}
+
+.inbox-message summary strong {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.inbox-message summary time {
+  grid-row: 2;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.notification-state {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.is-unread .notification-state {
+  color: var(--red);
+}
+
+.inbox-message-body {
+  padding: 0 16px 16px;
+}
+
+.inbox-message-body p {
+  white-space: pre-wrap;
+}
+
+.inbox-message-body button {
+  font-size: 0.8rem;
+}
+
+.inbox-empty {
+  padding: 48px 12px;
+  text-align: center;
+}
+
+.inbox-empty svg {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 18px;
+  color: var(--muted);
+}
+
+.unread-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--red);
+  font-size: 0.68rem;
+}
+
+.unread-count[hidden] {
+  display: none;
+}
+
+.inbox-shortcut button,
+.setting-action:has(.unread-count) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inbox-shortcut {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.inbox-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .event-copy {

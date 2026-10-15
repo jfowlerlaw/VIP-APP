@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test tests/features.test.mjs",
     "build": "node scripts/build-sites.mjs",
     "start": "node server.mjs",
     "cap:sync": "npm run build && npx cap sync",
