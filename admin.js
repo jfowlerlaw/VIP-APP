@@ -552,6 +552,7 @@ function renderRequests(requests) {
       <span class="status-pill"></span>
       <div>
         <strong></strong>
+        <small class="request-type"></small>
         <p></p>
       </div>
       <select data-request-status>
@@ -564,6 +565,7 @@ function renderRequests(requests) {
     chip.textContent = request.status || "Open";
     chip.className = `status-pill ${statusClass(request.status)}`;
     article.querySelector("strong").textContent = request.memberName || "VIP Member";
+    article.querySelector(".request-type").textContent = request.type || "VIP request";
     article.querySelector("p").textContent = request.message || request.type || "VIP request";
     const select = article.querySelector("select");
     select.value = request.status || "Open";

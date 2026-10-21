@@ -195,6 +195,50 @@ img {
   pointer-events: none;
 }
 
+.app-loader[hidden],
+.app-loader [hidden],
+.feedback-details[hidden] {
+  display: none;
+}
+
+.connection-panel {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  width: min(100%, 320px);
+  text-align: center;
+}
+
+.connection-panel > svg {
+  width: 36px;
+  height: 36px;
+  margin-top: 12px;
+  color: var(--muted);
+}
+
+.connection-panel h1 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.connection-panel p {
+  margin: 0;
+}
+
+.connection-panel > a {
+  color: var(--red);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.app-version {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .app-loader-card {
   display: grid;
   justify-items: center;

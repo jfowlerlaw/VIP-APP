@@ -112,3 +112,29 @@ test("API publishes without APNs, authenticates inbox access, persists reads and
     assert.equal((await request("/api/admin/events", { method: "POST", cookie, body: { ...event, image: "javascript:alert(1)" } })).status, 400);
   } finally { await server.close(); }
 });
+
+test("feedback saves sanitized build details for email and admin without changing other help requests", async () => {
+  const server = await startTestServer();
+  try {
+    const member = await signInMember(server.origin);
+    const send = (body, token = member.sessionToken) => fetch(`${server.origin}/api/requests`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+    });
+    const body = { type: "App feedback / bug report", phone: "4075550188", message: "The event link won't open.",
+      appInfo: { version: "1.0\nInjected", build: "7", platform: "ios", osVersion: "26.6", deviceId: "must-not-be-included" } };
+    assert.equal((await send(body, "invalid")).status, 401);
+    assert.equal((await send({ ...body, message: "" })).status, 400);
+    const response = await send(body);
+    // The isolated server has no email credentials, but still persists the request for the VIP desk.
+    assert.equal(response.status, 502);
+    const feedback = (await response.json()).request;
+    assert.equal(feedback.message, "The event link won't open.\n\nApp details\nVersion: 1.0 Injected\nBuild: 7\nPlatform: ios\nOS version: 26.6");
+    const ordinary = await send({ ...body, type: "Other" }).then((r) => r.json());
+    assert.equal(ordinary.request.message, body.message);
+    const legacy = await send({ ...body, appInfo: null }).then((r) => r.json());
+    assert.match(legacy.request.message, /Build: Not available/);
+    const login = await fetch(`${server.origin}/api/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "local-feature-test" }) });
+    const requests = await fetch(`${server.origin}/api/admin/requests`, { headers: { Cookie: login.headers.get("set-cookie").split(";")[0] } }).then((r) => r.json());
+    assert.equal(requests.requests.find((request) => request.id === feedback.id).message, feedback.message);
+  } finally { await server.close(); }
+});

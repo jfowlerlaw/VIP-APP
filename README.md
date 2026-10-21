@@ -73,6 +73,16 @@ After at least one iPhone has enabled push notifications, open the admin dashboa
 - In Render, set `VIP_SHOW_CODES=false` once `SENDGRID_API_KEY` is configured so real testers receive emailed random codes instead of seeing the beta code on screen.
 - The iPhone app can register push-notification device tokens once the native plugin, Xcode capability, and `vip_push_tokens` Supabase table are set up. Admins can send a single-device test push, broadcast to every registered iPhone, and delete stale push devices from the Notifications section after APNs is configured.
 
+## Beta Reliability And Feedback
+
+Startup waits for the member session before showing either the card or sign-in. API requests time out after 20 seconds. Connection and server errors show a **Try Again** screen without deleting the saved sign-in; a confirmed expired session returns to login. Reconnecting to the internet also retries a failed startup. Submitted forms are never automatically resent after a timeout.
+
+Help includes **App feedback / bug report**. These reports include the installed app version, build, platform, and OS version in both the VIP desk email and the saved admin request. Other request categories stay unchanged. Reports do not include a device identifier. No database migration is needed for this update.
+
+Profile displays the installed iPhone app's actual version and build from Xcode, not a manually maintained web version. The browser displays **Web portal**. Run `npm run cap:sync` and publish a new iOS build to deliver these changes to TestFlight testers.
+
+Icons are bundled locally in `assets/lucide.min.js` (Lucide 1.61.0, with attribution in `assets/lucide.LICENSE`), so app startup no longer depends on an external icon CDN. Run `npm test` for startup recovery, timeout, feedback, inbox, and event checks.
+
 ## Supabase Database Setup
 
 The app can use Supabase/Postgres for beta data without changing the frontend. If `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are present in `.env`, the server uses Supabase. If they are blank, it falls back to the local JSON file.

@@ -603,7 +603,7 @@ async function handleApi(req, res, url) {
       memberName: member.cardName || member.name,
       type,
       phone,
-      message,
+      message: type === "App feedback / bug report" ? appendFeedbackDetails(message, body.appInfo) : message,
       emailTo: conciergeEmail,
       status: "Open",
       createdAt: new Date().toISOString(),
@@ -1435,6 +1435,15 @@ function apnsFailureMessage(result) {
   }
 
   return `APNs rejected the test notification with status ${result.status || "unknown"}.`;
+}
+
+function appendFeedbackDetails(message, appInfo) {
+  const info = appInfo && typeof appInfo === "object" ? appInfo : {};
+  const detail = (value) => typeof value === "string" || typeof value === "number"
+    ? String(value).replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 80) || "Not available"
+    : "Not available";
+  return [message, "", "App details", `Version: ${detail(info.version)}`, `Build: ${detail(info.build)}`,
+    `Platform: ${detail(info.platform)}`, `OS version: ${detail(info.osVersion)}`].join("\n");
 }
 
 async function sendConciergeEmail({ member, request }) {

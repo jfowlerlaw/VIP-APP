@@ -170,6 +170,20 @@ private final class ThemedBridgeViewController: CAPBridgeViewController {
                 forMainFrameOnly: true
             )
         )
+
+        let appInfo = [
+            "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+            "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+            "osVersion": UIDevice.current.systemVersion,
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: appInfo),
+           let json = String(data: data, encoding: .utf8) {
+            let script = "window.__VIP_APP_INFO__ = \(json); window.dispatchEvent(new Event('vip:app-info'));"
+            userContentController.addUserScript(
+                WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            )
+            webView?.evaluateJavaScript(script, completionHandler: nil)
+        }
     }
 
     deinit {

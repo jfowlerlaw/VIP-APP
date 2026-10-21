@@ -726,6 +726,21 @@ td small {
   border-radius: var(--radius);
 }
 
+.request-board article > div {
+  min-width: 0;
+}
+
+.request-board .request-type {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.request-board p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .config-list {
   display: grid;
   grid-template-columns: 1fr 1fr;

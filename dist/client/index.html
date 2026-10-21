@@ -38,7 +38,7 @@
       })();
     </script>
     <link rel="stylesheet" href="styles.css">
-    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script defer src="assets/lucide.min.js"></script>
     <script defer src="app.js"></script>
   </head>
   <body>
@@ -55,7 +55,7 @@
             </header>
 
             <section class="app-loader" data-app-loader aria-live="polite" aria-label="Loading VIP portal">
-              <div class="app-loader-card">
+              <div class="app-loader-card" data-launch-loading>
                 <div class="loader-logo-plate">
                   <img
                     class="loader-logo"
@@ -72,6 +72,18 @@
                 <div class="loader-progress" aria-hidden="true">
                   <span></span>
                 </div>
+              </div>
+              <div class="connection-panel" data-launch-error hidden>
+                <div class="loader-logo-plate">
+                  <img class="loader-logo" src="assets/just-call-moe-logo.png" alt="Just Call Moe">
+                </div>
+                <i data-lucide="wifi-off" aria-hidden="true"></i>
+                <h1 data-launch-error-title>Let's reconnect</h1>
+                <p data-launch-error-message>The VIP portal couldn't be reached. Please try again.</p>
+                <button class="primary-action" type="button" data-retry-launch>
+                  <i data-lucide="refresh-cw" aria-hidden="true"></i>Try Again
+                </button>
+                <a data-launch-support href="mailto:vip@justcallmoe.com?subject=VIP%20app%20connection%20help">Contact VIP Support</a>
               </div>
             </section>
 
@@ -296,6 +308,7 @@
                 <select id="request-type" name="request-type">
                   <option>Legal question</option>
                   <option>Event help</option>
+                  <option>App feedback / bug report</option>
                   <option>Other</option>
                 </select>
 
@@ -313,6 +326,7 @@
 
                 <label for="message">Message</label>
                 <textarea id="message" name="message" rows="4" placeholder="How can the VIP team help?" required></textarea>
+                <p class="fine-print feedback-details" data-feedback-details hidden>App version and device software details are included with this report.</p>
 
                 <button class="primary-action" type="submit">
                   <i data-lucide="send" aria-hidden="true"></i>
@@ -397,6 +411,7 @@
                 <span class="fallback-icon" aria-hidden="true">E</span>
                 Save Profile
               </button>
+              <p class="app-version" data-app-version>Version details unavailable</p>
             </section>
 
             <nav class="bottom-nav" aria-label="Primary">

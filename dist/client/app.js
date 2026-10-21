@@ -8,6 +8,10 @@ const etchedName = document.querySelector(".etched-name");
 const avatar = document.querySelector(".avatar");
 const appScreen = document.querySelector(".app-screen");
 const appLoader = document.querySelector("[data-app-loader]");
+const launchLoading = document.querySelector("[data-launch-loading]");
+const launchError = document.querySelector("[data-launch-error]");
+const retryLaunchButton = document.querySelector("[data-retry-launch]");
+const appVersionLabel = document.querySelector("[data-app-version]");
 const inboxList = document.querySelector("[data-inbox-list]");
 const markAllReadButton = document.querySelector("[data-mark-all-read]");
 const claimForm = document.querySelector("[data-claim-form]");
@@ -26,6 +30,7 @@ const themeToggles = document.querySelectorAll("[data-theme-toggle]");
 const themeControls = document.querySelectorAll("[data-theme-choice]");
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const conciergeEmail = "vip@justcallmoe.com";
+const feedbackRequestType = "App feedback / bug report";
 const demoCode = "246810";
 const nativeApiBaseUrl = "https://vip-app-091y.onrender.com";
 const themeStorageKey = "jcm-vip-theme";
@@ -62,6 +67,7 @@ let betaApiReady = false;
 let toastTimer;
 let pushListenersAttached = false;
 let appLaunchFinished = false;
+let bootInFlight = false;
 let inboxNotifications = [];
 let inboxRequestId = 0;
 let pendingNotificationId = null;
@@ -239,6 +245,16 @@ function clearStoredPushToken() {
 }
 
 async function apiRequest(path, options = {}) {
+  const { timeoutMs = 20000, signal, ...fetchOptions } = options;
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timer = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers || {}),
@@ -248,20 +264,84 @@ async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${sessionToken}`;
   }
 
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    credentials: isNativeShell() ? "include" : "same-origin",
-    headers,
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(payload.message || "Request failed.");
-    error.status = response.status;
+  try {
+    const response = await fetch(apiUrl(path), {
+      ...fetchOptions,
+      credentials: isNativeShell() ? "include" : "same-origin",
+      headers,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch((error) => {
+      if (controller.signal.aborted) throw error;
+      return {};
+    });
+    if (!response.ok) {
+      const error = new Error(payload.message || "Request failed.");
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  } catch (error) {
+    if (timedOut) {
+      const isRead = !options.method || options.method === "GET";
+      const timeoutError = new Error(isRead
+        ? "The VIP portal took too long to respond. Please try again."
+        : "The VIP portal took too long to respond. Your request may have gone through. Please check before sending again.");
+      timeoutError.code = "TIMEOUT";
+      throw timeoutError;
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Couldn't connect to the VIP portal. Check your connection and try again.");
+    }
     throw error;
+  } finally {
+    window.clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
+}
 
-  return payload;
+function getAppInfo() {
+  const info = window.__VIP_APP_INFO__ || {};
+  return {
+    version: String(info.version || ""),
+    build: String(info.build || ""),
+    platform: isNativeShell() ? pushPlatform() : "web",
+    osVersion: String(info.osVersion || ""),
+  };
+}
+
+function updateAppVersion() {
+  if (!appVersionLabel) return;
+  const info = getAppInfo();
+  appVersionLabel.textContent = !isNativeShell() ? "Web portal"
+    : info.version && info.build ? `Version ${info.version} (Build ${info.build})`
+    : "Version details unavailable";
+}
+
+function setLaunchState(state, error) {
+  appLaunchFinished = false;
+  appLoader?.removeAttribute("hidden");
+  appLoader?.classList.remove("is-hidden");
+  if (appLoader) {
+    appLoader.dataset.state = state;
+    appLoader.setAttribute("aria-label", state === "error" ? "VIP portal connection problem" : "Loading VIP portal");
+    appLoader.setAttribute("aria-busy", String(state === "loading"));
+  }
+  for (const child of appScreen?.children || []) {
+    if (child !== appLoader) child.inert = true;
+  }
+  if (launchLoading) launchLoading.hidden = state !== "loading";
+  if (launchError) launchError.hidden = state !== "error";
+  if (state === "error") {
+    const title = document.querySelector("[data-launch-error-title]");
+    const message = document.querySelector("[data-launch-error-message]");
+    if (title) title.textContent = navigator.onLine === false ? "You're offline" : "Let's reconnect";
+    if (message) message.textContent = navigator.onLine === false
+      ? "Connect to the internet, then try again. Your saved sign-in is still on this device."
+      : error?.code === "TIMEOUT" ? error.message
+      : "The VIP portal couldn't be reached. Please try again in a moment. Your saved sign-in hasn't been removed.";
+    retryLaunchButton?.focus();
+  }
 }
 
 function showToast(message) {
@@ -277,6 +357,13 @@ function showToast(message) {
 function finishAppLaunch() {
   if (appLaunchFinished) return;
   appLaunchFinished = true;
+  if (appLoader) {
+    appLoader.dataset.state = "ready";
+    appLoader.setAttribute("aria-busy", "false");
+  }
+  for (const child of appScreen?.children || []) {
+    if (child !== appLoader) child.inert = false;
+  }
   appLoader?.classList.add("is-hidden");
   window.setTimeout(() => {
     if (appLaunchFinished) {
@@ -662,6 +749,8 @@ function resetMemberAuth() {
   codeForm?.reset();
   conciergeForms.forEach((form) => {
     form.reset();
+    const feedbackDetails = form.querySelector("[data-feedback-details]");
+    if (feedbackDetails) feedbackDetails.hidden = true;
     const statusMessage = form.querySelector("[data-request-status]");
     if (statusMessage) {
       statusMessage.textContent =
@@ -1320,6 +1409,11 @@ document.querySelectorAll("[data-toggle-alert]").forEach((button) => {
 });
 
 conciergeForms.forEach((form) => {
+  const feedbackDetails = form.querySelector("[data-feedback-details]");
+  const requestType = form.querySelector("select");
+  requestType?.addEventListener("change", () => {
+    if (feedbackDetails) feedbackDetails.hidden = requestType.value !== feedbackRequestType;
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const textarea = form.querySelector("textarea");
@@ -1359,7 +1453,8 @@ conciergeForms.forEach((form) => {
         setStatus("Sending your request to the VIP desk...");
         const result = await apiRequest("/api/requests", {
           method: "POST",
-          body: JSON.stringify({ type, phone, message }),
+          body: JSON.stringify({ type, phone, message,
+            ...(type === feedbackRequestType ? { appInfo: getAppInfo() } : {}) }),
         });
 
         if (result.email?.status !== "sent") {
@@ -1391,6 +1486,7 @@ conciergeForms.forEach((form) => {
     setStatus("Sent to the VIP desk. The team will follow up shortly.");
     showToast("Request emailed to the VIP desk.");
     form.reset();
+    if (feedbackDetails) feedbackDetails.hidden = true;
   });
 });
 
@@ -1461,45 +1557,43 @@ memberLogoutButtons.forEach((button) => {
 });
 
 async function bootBetaApi() {
+  if (bootInFlight) return;
+  bootInFlight = true;
+  setLaunchState("loading");
   try {
     await apiRequest("/api/health");
     betaApiReady = true;
+    try {
+      const session = await apiRequest("/api/me");
+      if (!session.member) throw new Error("Member details could not be loaded.");
+      applyMember(session.member, { announce: false });
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      resetMemberAuth();
+    }
+    finishAppLaunch();
   } catch (error) {
     betaApiReady = false;
-    renderEventsUnavailable();
-    renderPerksUnavailable();
-    if (claimMessage) {
-      claimMessage.textContent =
-        "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
-    }
-    finishAppLaunch();
+    setLaunchState("error", error);
     return;
-  }
-
-  const eventsPromise = apiRequest("/api/events")
-    .then((events) => renderEvents(events.events))
-    .catch(() => renderEventsUnavailable());
-
-  const perksPromise = apiRequest("/api/perks")
-    .then((perks) => renderPerks(perks.perks))
-    .catch(() => renderPerksUnavailable());
-
-  try {
-    const session = await apiRequest("/api/me");
-    applyMember(session.member, { announce: false });
-  } catch (error) {
-    if (error.status === 401) {
-      clearStoredMemberSession();
-    }
-    if (claimMessage) {
-      claimMessage.textContent = "Use the email address connected to your VIP membership.";
-    }
   } finally {
-    finishAppLaunch();
+    bootInFlight = false;
   }
 
-  await Promise.all([eventsPromise, perksPromise]);
+  await Promise.all([
+    apiRequest("/api/events").then((events) => renderEvents(events.events)).catch(renderEventsUnavailable),
+    apiRequest("/api/perks").then((perks) => renderPerks(perks.perks)).catch(renderPerksUnavailable),
+  ]);
 }
+
+retryLaunchButton?.addEventListener("click", bootBetaApi);
+document.querySelector("[data-launch-support]")?.addEventListener("click", (event) => {
+  openExternalUrl(event, event.currentTarget.href);
+});
+window.addEventListener("online", () => {
+  if (appLoader?.dataset.state === "error") bootBetaApi();
+});
+window.addEventListener("vip:app-info", updateAppVersion);
 
 function setupInteractiveCard() {
   const card = document.querySelector("[data-interactive-card]");
@@ -1588,5 +1682,6 @@ window.addEventListener("DOMContentLoaded", () => {
   updatePushSetting();
   attachPushListeners();
   setupInteractiveCard();
+  updateAppVersion();
   bootBetaApi();
 });
