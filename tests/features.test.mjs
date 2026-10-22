@@ -206,3 +206,57 @@ test("Supabase name edits patch all name columns without unrelated member change
   await db.updateMember("member-a", { ...patch, cardName: patch.name });
   assert.equal(calls[1].body.card_name, patch.name);
 });
+
+test("announcements can omit buttons while existing linked messages keep their destinations", async () => {
+  const server = await startTestServer();
+  try {
+    const login = await fetch(`${server.origin}/api/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "local-feature-test" }) });
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const expected = new Map();
+    for (const actionView of ["events", "perks", "card", "concierge", "none", undefined, null, "unsupported"]) {
+      const response = await fetch(`${server.origin}/api/admin/push/broadcast`, {
+        method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({ title: "Member update", message: "A general VIP announcement.", actionView }),
+      });
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      expected.set(result.notificationId, ["events", "perks", "card", "concierge"].includes(actionView) ? actionView : "none");
+    }
+    const member = await signInMember(server.origin);
+    const headers = { Authorization: `Bearer ${member.sessionToken}` };
+    const inbox = await fetch(`${server.origin}/api/notifications`, { headers }).then((r) => r.json());
+    assert.equal(inbox.notifications.length, expected.size);
+    for (const notice of inbox.notifications) assert.equal(notice.actionView, expected.get(notice.id));
+    const plain = inbox.notifications.find((notice) => notice.actionView === "none");
+    const read = await fetch(`${server.origin}/api/notifications/${plain.id}/read`, { method: "PATCH", headers });
+    assert.equal(read.status, 200);
+    const updated = await fetch(`${server.origin}/api/notifications`, { headers }).then((r) => r.json());
+    assert.ok(updated.notifications.find((notice) => notice.id === plain.id).readAt);
+    for (const notice of updated.notifications) assert.equal(notice.actionView, expected.get(notice.id));
+  } finally { await server.close(); }
+});
+
+test("Supabase preserves the no-button destination when storing and loading announcements", async (t) => {
+  const previousUrl = process.env.SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SECRET_KEY;
+  process.env.SUPABASE_URL = "https://database.example";
+  process.env.SUPABASE_SECRET_KEY = "test-only";
+  const db = createDatabase({ rootDir: tmpdir(), seedDatabase: {} });
+  if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+  else process.env.SUPABASE_URL = previousUrl;
+  if (previousKey === undefined) delete process.env.SUPABASE_SECRET_KEY;
+  else process.env.SUPABASE_SECRET_KEY = previousKey;
+  let stored;
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    if (options.method === "POST") {
+      stored = JSON.parse(options.body);
+      return new Response(null, { status: 201 });
+    }
+    return new Response(JSON.stringify([{ ...stored, vip_notification_reads: [] }]));
+  });
+  await db.createNotification({ id: "plain-message", title: "Member news", body: "General update", actionView: "none", createdAt: "2026-10-22T18:00:00Z" });
+  assert.equal(stored.action_view, "none");
+  const notices = await db.listNotifications("member-a");
+  assert.equal(notices[0].actionView, "none");
+  assert.equal(notices[0].body, "General update");
+});

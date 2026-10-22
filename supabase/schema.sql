@@ -71,10 +71,20 @@ create table if not exists public.vip_notifications (
   title text not null,
   body text not null,
   member_id text references public.vip_members(id) on delete cascade,
-  action_view text not null default 'events'
-    check (action_view in ('events', 'perks', 'card', 'concierge')),
+  action_view text not null default 'none'
+    check (action_view in ('none', 'events', 'perks', 'card', 'concierge')),
   created_at timestamptz not null default now()
 );
+
+alter table public.vip_notifications
+  drop constraint if exists vip_notifications_action_view_check;
+
+alter table public.vip_notifications
+  add constraint vip_notifications_action_view_check
+  check (action_view in ('none', 'events', 'perks', 'card', 'concierge'));
+
+alter table public.vip_notifications
+  alter column action_view set default 'none';
 
 create index if not exists vip_notifications_member_created
   on public.vip_notifications (member_id, created_at desc);

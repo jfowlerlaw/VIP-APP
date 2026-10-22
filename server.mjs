@@ -1189,7 +1189,7 @@ function selectPushTestToken(tokens, tokenId) {
 function createAnnouncement(title, body, actionView, memberId = null) {
   return {
     id: `notice_${randomUUID()}`, title, body, memberId,
-    actionView: ["events", "perks", "card", "concierge"].includes(actionView) ? actionView : "events",
+    actionView: ["none", "events", "perks", "card", "concierge"].includes(actionView) ? actionView : "none",
     createdAt: new Date().toISOString(),
   };
 }

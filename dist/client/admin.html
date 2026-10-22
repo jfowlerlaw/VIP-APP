@@ -636,6 +636,16 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                   Message
                   <textarea name="message" rows="3">This is a test notification from the VIP admin portal.</textarea>
                 </label>
+                <label>
+                  Open from announcement
+                  <select name="actionView">
+                    <option value="none">No button</option>
+                    <option value="events">Events</option>
+                    <option value="perks">Perks</option>
+                    <option value="card">VIP card</option>
+                    <option value="concierge">Help form</option>
+                  </select>
+                </label>
                 <button class="primary-button" type="submit" data-push-send-button>
                   <i data-lucide="send" aria-hidden="true"></i>
                   Send Test Push
@@ -663,6 +673,7 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                 <label>
                   Open from announcement
                   <select name="actionView">
+                    <option value="none">No button</option>
                     <option value="events">Events</option>
                     <option value="perks">Perks</option>
                     <option value="card">VIP card</option>

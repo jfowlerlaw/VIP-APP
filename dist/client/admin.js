@@ -1271,6 +1271,7 @@ document.querySelector("[data-push-test-form]")?.addEventListener("submit", asyn
         tokenId: String(data.get("tokenId") || ""),
         title: String(data.get("title") || ""),
         message: String(data.get("message") || ""),
+        actionView: String(data.get("actionView") || "none"),
       }),
     });
 
@@ -1307,7 +1308,7 @@ document.querySelector("[data-push-broadcast-form]")?.addEventListener("submit",
       body: JSON.stringify({
         title: String(data.get("title") || ""),
         message: String(data.get("message") || ""),
-        actionView: String(data.get("actionView") || "events"),
+        actionView: String(data.get("actionView") || "none"),
       }),
     });
     const summary = result.summary || {};
