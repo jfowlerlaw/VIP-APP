@@ -56,17 +56,16 @@ test("Supabase inbox scopes embedded read receipts and safely quotes member IDs"
   t.mock.method(globalThis, "fetch", async (url, options) => {
     calls.push({ url: new URL(url), options });
     return new Response(JSON.stringify([{ id: "notice", title: "Hello", body: "Members", member_id: null,
-      action_view: "events", created_at: "2026-10-15T12:00:00Z", vip_notification_reads: [{ read_at: "2026-10-15T13:00:00Z" }] }]));
+      action_view: "events", created_at: "2026-10-15T12:00:00Z", vip_notification_reads: [{ member_id: memberId, read_at: "2026-10-15T13:00:00Z", deleted_at: null }] }]));
   });
   const notices = await db.listNotifications(memberId);
   assert.equal(notices[0].readAt, "2026-10-15T13:00:00Z");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url.searchParams.get("select"), "*,vip_notification_reads(read_at),deleted:vip_notification_reads()");
+  assert.equal(calls[0].url.searchParams.get("select"), "*,vip_notification_reads(member_id,read_at,deleted_at)");
   assert.equal(calls[0].url.searchParams.get("or"), '(member_id.is.null,member_id.eq."member-a,(\\"quoted\\")")');
   assert.equal(calls[0].url.searchParams.get("vip_notification_reads.member_id"), 'eq."member-a,(\\"quoted\\")"');
-  assert.equal(calls[0].url.searchParams.get("deleted.member_id"), 'eq."member-a,(\\"quoted\\")"');
-  assert.equal(calls[0].url.searchParams.get("deleted.deleted_at"), "not.is.null");
-  assert.equal(calls[0].url.searchParams.get("deleted"), "is.null");
+  assert.equal(calls[0].url.searchParams.get("order"), "created_at.desc,id.desc");
+  assert.equal(calls[0].url.searchParams.get("offset"), "0");
 });
 
 test("API publishes without APNs, authenticates inbox access, persists reads and edits events", async () => {
@@ -340,7 +339,7 @@ test("Supabase deletion checks ownership then saves only that member's receipt",
   const calls = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     calls.push({ url: new URL(url), options });
-    if (options.method === "POST") return new Response(null, { status: 201 });
+    if (options.method === "POST") return new Response(JSON.stringify([JSON.parse(options.body)]), { status: 201 });
     return new Response(JSON.stringify(new URL(url).searchParams.get("id") === "eq.visible" ? [{ id: "visible" }] : []));
   });
   assert.equal(await db.deleteNotification('member-a,("quoted")', "visible"), true);
@@ -350,7 +349,8 @@ test("Supabase deletion checks ownership then saves only that member's receipt",
   assert.equal(body.member_id, 'member-a,("quoted")');
   assert.equal(body.notification_id, "visible");
   assert.ok(Number.isFinite(Date.parse(body.deleted_at)));
-  assert.equal(calls[1].options.headers.Prefer, "resolution=merge-duplicates");
+  assert.equal(calls[1].url.searchParams.get("on_conflict"), "notification_id,member_id");
+  assert.equal(calls[1].options.headers.Prefer, "resolution=merge-duplicates,return=representation");
   assert.equal(await db.deleteNotification("member-a", "not-owned"), false);
   assert.equal(calls.length, 3);
   assert.ok(calls.every((call) => call.options.method !== "DELETE"));

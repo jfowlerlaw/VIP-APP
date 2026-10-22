@@ -263,21 +263,30 @@ export function createDatabase({ rootDir, seedDatabase }) {
         )?.readAt || null }));
     }
     const quotedMemberId = `"${String(memberId).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-    const rows = await supabaseRequest("vip_notifications", {
-      query: queryString({
-        select: "*,vip_notification_reads(read_at),deleted:vip_notification_reads()",
-        or: `(member_id.is.null,member_id.eq.${quotedMemberId})`,
-        "vip_notification_reads.member_id": `eq.${quotedMemberId}`,
-        "deleted.member_id": `eq.${quotedMemberId}`,
-        "deleted.deleted_at": "not.is.null",
-        deleted: "is.null",
-        order: "created_at.desc", limit: "200",
-      }),
-    });
-    return rows.map((row) => ({
-      id: row.id, title: row.title, body: row.body, actionView: row.action_view,
-      memberId: row.member_id, createdAt: row.created_at, readAt: row.vip_notification_reads?.[0]?.read_at || null,
-    }));
+    const notifications = [];
+    const pageSize = 200;
+    // Filter saved deletions explicitly, then page until the visible inbox is full.
+    for (let offset = 0; notifications.length < 200; offset += pageSize) {
+      const rows = await supabaseRequest("vip_notifications", {
+        query: queryString({
+          select: "*,vip_notification_reads(member_id,read_at,deleted_at)",
+          or: `(member_id.is.null,member_id.eq.${quotedMemberId})`,
+          "vip_notification_reads.member_id": `eq.${quotedMemberId}`,
+          order: "created_at.desc,id.desc", limit: String(pageSize), offset: String(offset),
+        }),
+      });
+      for (const row of rows) {
+        const receipt = row.vip_notification_reads?.find((read) => read.member_id === memberId);
+        if (receipt?.deleted_at || (row.member_id && row.member_id !== memberId)) continue;
+        notifications.push({
+          id: row.id, title: row.title, body: row.body, actionView: row.action_view,
+          memberId: row.member_id, createdAt: row.created_at, readAt: receipt?.read_at || null,
+        });
+        if (notifications.length === 200) break;
+      }
+      if (rows.length < pageSize) break;
+    }
+    return notifications;
   }
 
   async function createNotification(notification) {
@@ -337,11 +346,16 @@ export function createDatabase({ rootDir, seedDatabase }) {
         or: `(member_id.is.null,member_id.eq.${quotedMemberId})` }),
     });
     if (!rows.length) return false;
-    await supabaseRequest("vip_notification_reads", {
+    const saved = await supabaseRequest("vip_notification_reads", {
       method: "POST",
+      query: queryString({ on_conflict: "notification_id,member_id", select: "notification_id,member_id,deleted_at" }),
       body: { notification_id: notificationId, member_id: memberId, deleted_at: deletedAt },
-      headers: { Prefer: "resolution=merge-duplicates" },
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
     });
+    if (!Array.isArray(saved) || !saved.some((row) => row.notification_id === notificationId &&
+      row.member_id === memberId && row.deleted_at && Number.isFinite(Date.parse(row.deleted_at)))) {
+      throw new Error("Notification deletion could not be verified.");
+    }
     return true;
   }
 
