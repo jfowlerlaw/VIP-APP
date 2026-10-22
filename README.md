@@ -135,7 +135,7 @@ Before deploying this update, run `supabase/add_inbox_and_event_details.sql` in 
 
 In Admin > Notifications, **Publish Announcement** saves a message to all member inboxes and sends an APNs alert to enabled iPhones when configured. Members without push permissions still receive the inbox message. Test pushes are saved only to the selected member's inbox. Old pushes sent before this update cannot be recovered.
 
-The member inbox opens from the Card screen or Profile. Opening a message marks it read; **Mark all read** clears the unread count. The inbox refreshes when opened, when the app returns to the foreground, or when a foreground push arrives. It shows the newest 200 announcements.
+The member inbox opens from the **Inbox** tab in the bottom navigation. A badge on its icon shows unread messages (99+ for larger counts) and disappears when there are none. Opening a message marks it read; **Mark all read** clears the unread count. The inbox refreshes when opened, when the app returns to the foreground, or when a foreground push arrives. It shows the newest 200 announcements.
 
 In Admin > Events, add or edit an image URL, venue, street address, and start/end times. Date/time fields use the admin browser's displayed time zone; the server stores the exact UTC times. Confirmed times enable an **Add to Calendar** link, which exports a standard `.ics` file. Unconfirmed events keep their date label without guessing a year or duration for a calendar entry. Directions open the venue address in Maps on iPhone or Google Maps on the web.
 

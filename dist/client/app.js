@@ -634,7 +634,10 @@ function activateView(target, title) {
   });
 
   navItems.forEach((item) => {
-    item.classList.toggle("is-active", item.dataset.viewTarget === target);
+    const selected = item.dataset.viewTarget === target;
+    item.classList.toggle("is-active", selected);
+    if (selected) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
   });
 
   if (viewTitle) {
@@ -843,20 +846,22 @@ function updateInboxBadges() {
   document.querySelectorAll("[data-unread-count]").forEach((badge) => {
     badge.textContent = unread > 99 ? "99+" : String(unread);
     badge.hidden = unread === 0;
-    badge.setAttribute("aria-label", `${unread} unread announcements`);
   });
+  document.querySelector('[data-view-target="notifications"]')?.setAttribute(
+    "aria-label", unread ? `Inbox, ${unread} unread ${unread === 1 ? "message" : "messages"}` : "Inbox"
+  );
   const summary = document.querySelector("[data-inbox-summary]");
   if (summary) summary.textContent = !inboxLoaded
     ? (inboxError ? "Inbox unavailable" : "VIP announcements")
-    : (unread ? `${unread} unread ${unread === 1 ? "announcement" : "announcements"}` : "You're all caught up");
+    : (unread ? `${unread} unread ${unread === 1 ? "message" : "messages"}` : "You're all caught up");
   if (markAllReadButton) markAllReadButton.disabled = !unread || inboxLoading;
 }
 
 function renderInbox() {
+  updateInboxBadges();
   if (!inboxList) return;
   const expanded = new Set([...inboxList.querySelectorAll("details[open]")].map((item) => item.dataset.notificationId));
   inboxList.replaceChildren();
-  updateInboxBadges();
   if (!inboxNotifications.length) {
     inboxList.innerHTML = '<div class="inbox-empty"><i data-lucide="inbox" aria-hidden="true"></i><h2>No announcements yet</h2><p>Your VIP news and invitations will appear here.</p></div>';
   }

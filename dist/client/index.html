@@ -167,19 +167,10 @@
               </div>
 
               <div class="vip-snapshot" aria-label="VIP snapshot">
-                <article class="snapshot-row inbox-shortcut">
-                  <i data-lucide="inbox" aria-hidden="true"></i>
-                  <div>
-                    <p class="eyebrow">Your Inbox</p>
-                    <h2 data-inbox-summary>VIP announcements</h2>
-                    <p>News, invitations, and member updates.</p>
-                  </div>
-                  <button type="button" data-view-shortcut="notifications" data-title="Inbox">Open<span class="unread-count" data-unread-count hidden>0</span></button>
-                </article>
                 <article class="snapshot-row">
                   <i data-lucide="calendar-check" aria-hidden="true"></i>
                   <div>
-                    <p class="eyebrow">Next Invite</p>
+                    <p class="eyebrow">Upcoming Event</p>
                     <h2 data-next-event-title>VIP Restaurant Night</h2>
                     <p data-next-event-meta>Jun 18, Orlando · Tap to view details</p>
                   </div>
@@ -261,9 +252,7 @@
 
             <section class="view" id="view-notifications" aria-label="Notification inbox">
               <div class="inbox-toolbar">
-                <button class="icon-button" type="button" data-view-shortcut="card" data-title="Your Card" aria-label="Back to card" title="Back to card">
-                  <i data-lucide="arrow-left" aria-hidden="true"></i>
-                </button>
+                <p class="inbox-summary" data-inbox-summary role="status">VIP announcements</p>
                 <button class="secondary-action" type="button" data-mark-all-read disabled>
                   <i data-lucide="check-check" aria-hidden="true"></i>Mark all read
                 </button>
@@ -384,16 +373,6 @@
                   </div>
                   <div class="setting-row">
                     <span>
-                      <strong>Inbox</strong>
-                      <small>VIP announcements and invitations</small>
-                    </span>
-                    <button class="setting-action" type="button" data-view-shortcut="notifications" data-title="Inbox" aria-label="Open inbox" title="Open inbox">
-                      <i data-lucide="inbox" aria-hidden="true"></i>
-                      <span class="unread-count" data-unread-count hidden>0</span>
-                    </button>
-                  </div>
-                  <div class="setting-row">
-                    <span>
                       <strong>Sign out</strong>
                       <small>Return to VIP login on this device</small>
                     </span>
@@ -415,7 +394,7 @@
             </section>
 
             <nav class="bottom-nav" aria-label="Primary">
-              <button class="nav-item is-active" type="button" data-view-target="card" data-title="Hi, VIP!">
+              <button class="nav-item is-active" type="button" data-view-target="card" data-title="Hi, VIP!" aria-current="page">
                 <i data-lucide="credit-card" aria-hidden="true"></i>
                 <span class="fallback-icon" aria-hidden="true">C</span>
                 <span>Card</span>
@@ -429,6 +408,14 @@
                 <i data-lucide="calendar-days" aria-hidden="true"></i>
                 <span class="fallback-icon" aria-hidden="true">D</span>
                 <span>Events</span>
+              </button>
+              <button class="nav-item" type="button" data-view-target="notifications" data-title="Inbox" aria-label="Inbox">
+                <span class="nav-icon">
+                  <i data-lucide="inbox" aria-hidden="true"></i>
+                  <span class="fallback-icon" aria-hidden="true">I</span>
+                  <span class="unread-count" data-unread-count aria-hidden="true" hidden>0</span>
+                </span>
+                <span>Inbox</span>
               </button>
               <button class="nav-item" type="button" data-view-target="concierge" data-title="Concierge">
                 <i data-lucide="messages-square" aria-hidden="true"></i>

@@ -934,6 +934,16 @@ p {
   min-width: 0;
   padding: 0 10px;
   font-size: 0.76rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.inbox-summary {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .inbox-list {
@@ -1028,17 +1038,6 @@ p {
 
 .unread-count[hidden] {
   display: none;
-}
-
-.inbox-shortcut button,
-.setting-action:has(.unread-count) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.inbox-shortcut {
-  grid-template-columns: 34px minmax(0, 1fr) auto;
 }
 
 .inbox-toolbar button:disabled {
@@ -1373,7 +1372,7 @@ p {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   min-height: 74px;
   padding: 7px 8px 10px;
@@ -1479,12 +1478,38 @@ p {
   gap: 3px;
   min-width: 0;
   min-height: 56px;
+  grid-template-rows: 26px auto;
+  align-content: center;
+  padding: 4px 2px;
   border: 0;
   border-radius: var(--radius);
   color: var(--muted);
   background: transparent;
   font-size: 0.71rem;
   font-weight: 800;
+  line-height: 1.2;
+}
+
+.nav-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+}
+
+.nav-icon .unread-count {
+  position: absolute;
+  top: -5px;
+  right: -10px;
+  width: max-content;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 2px solid var(--nav-bg);
+  font-size: 0.625rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .nav-item.is-active {

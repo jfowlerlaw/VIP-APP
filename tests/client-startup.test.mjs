@@ -11,7 +11,8 @@ function element() {
   const classes = new Set();
   return {
     dataset: {}, attributes: {}, listeners: {}, children: [], hidden: false, textContent: "", value: "",
-    classList: { add: (...names) => names.forEach((name) => classes.add(name)), remove: (...names) => names.forEach((name) => classes.delete(name)), contains: (name) => classes.has(name) },
+    classList: { add: (...names) => names.forEach((name) => classes.add(name)), remove: (...names) => names.forEach((name) => classes.delete(name)), contains: (name) => classes.has(name),
+      toggle: (name, selected) => selected ? classes.add(name) : classes.delete(name) },
     setAttribute(name, value) { this.attributes[name] = value; if (name === "hidden") this.hidden = true; },
     removeAttribute(name) { delete this.attributes[name]; if (name === "hidden") this.hidden = false; },
     addEventListener(name, listener) { this.listeners[name] = listener; },
@@ -21,7 +22,22 @@ function element() {
 
 function client(t, fetch, { native = false } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
-    "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]"].map((key) => [key, element()]));
+    "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
+    "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title"].map((key) => [key, element()]));
+  const targets = ["card", "perks", "events", "notifications", "concierge", "profile"];
+  const nav = targets.map((target) => {
+    const item = element();
+    item.dataset.viewTarget = target;
+    item.dataset.title = target === "notifications" ? "Inbox" : target;
+    elements[`[data-view-target="${target}"]`] = item;
+    return item;
+  });
+  const views = targets.map((target) => {
+    const view = element();
+    view.id = `view-${target}`;
+    elements[`#view-${target}`] = view;
+    return view;
+  });
   const form = element();
   const fields = Object.fromEntries(["select", "textarea", "[data-request-phone]", "[data-request-status]", "button[type='submit']", "[data-feedback-details]"].map((key) => [key, element()]));
   form.querySelector = (selector) => fields[selector] || null;
@@ -37,7 +53,8 @@ function client(t, fetch, { native = false } = {}) {
     document: {
       documentElement: { dataset: {}, classList: element().classList },
       querySelector: (selector) => elements[selector] || null,
-      querySelectorAll: (selector) => selector === "[data-concierge-form]" ? [form] : [],
+      querySelectorAll: (selector) => ({ "[data-concierge-form]": [form], "[data-view-target]": nav, ".view": views,
+        "[data-unread-count]": [elements["[data-unread-count]"]] })[selector] || [],
       addEventListener() {},
     },
     window: {
@@ -146,4 +163,46 @@ test("native build details update Profile and are attached only to feedback subm
   const web = client(t, async (path) => success(path));
   web.run("updateAppVersion()");
   assert.equal(web.elements["[data-app-version]"].textContent, "Web portal");
+});
+
+test("Inbox tab selects its view and unread badge follows reads, mark-all, large counts, and logout", async (t) => {
+  let failRead = false;
+  const notices = [{ id: "first", readAt: null }, { id: "second", readAt: null }, { id: "old", readAt: "2026-10-21T12:00:00Z" }];
+  const c = client(t, async (path) => {
+    if (path === "/api/notifications") return new Response(JSON.stringify({ notifications: notices }));
+    if (path.endsWith("/read") && failRead) return new Response("{}", { status: 503 });
+    return success(path);
+  });
+  await c.run("bootBetaApi()");
+  await c.run("loadInbox()");
+  const tab = c.elements['[data-view-target="notifications"]'];
+  const badge = c.elements["[data-unread-count]"];
+  assert.equal(badge.textContent, "2");
+  assert.equal(badge.hidden, false);
+  assert.equal(tab.attributes["aria-label"], "Inbox, 2 unread messages");
+  tab.listeners.click();
+  await c.run("loadInbox()");
+  assert.equal(c.elements["#view-notifications"].classList.contains("is-active"), true);
+  assert.equal(tab.attributes["aria-current"], "page");
+  assert.equal(c.elements["#view-title"].textContent, "Inbox");
+  const readState = element();
+  c.context.testMessage = { ...element(), querySelector: () => readState };
+  failRead = true;
+  await c.run("markNotificationRead(inboxNotifications[0], testMessage)");
+  assert.equal(badge.textContent, "2");
+  failRead = false;
+  await c.run("markNotificationRead(inboxNotifications[0], testMessage)");
+  assert.equal(badge.textContent, "1");
+  assert.equal(tab.attributes["aria-label"], "Inbox, 1 unread message");
+  await c.elements["[data-mark-all-read]"].listeners.click();
+  assert.equal(badge.hidden, true);
+  assert.equal(tab.attributes["aria-label"], "Inbox");
+  assert.equal(c.elements["[data-inbox-summary]"].textContent, "You're all caught up");
+  c.run("inboxNotifications = Array.from({ length: 125 }, () => ({ readAt: null })); updateInboxBadges()");
+  assert.equal(badge.textContent, "99+");
+  assert.equal(tab.attributes["aria-label"], "Inbox, 125 unread messages");
+  c.run("resetMemberAuth()");
+  assert.equal(badge.hidden, true);
+  assert.equal(tab.attributes["aria-current"], undefined);
+  assert.equal(c.elements['[data-view-target="card"]'].attributes["aria-current"], "page");
 });
