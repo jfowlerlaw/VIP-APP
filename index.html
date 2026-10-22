@@ -463,15 +463,17 @@
     </main>
 
     <dialog class="notification-delete-dialog" data-notification-delete-dialog aria-labelledby="notification-delete-heading">
-      <h2 id="notification-delete-heading">Delete message?</h2>
-      <p class="notification-delete-title" data-notification-delete-title></p>
-      <p>This removes it from your inbox only.</p>
-      <p class="fine-print" data-notification-delete-error role="alert" hidden></p>
-      <div class="notification-delete-actions">
-        <button class="secondary-action" type="button" data-cancel-notification-delete autofocus>Cancel</button>
-        <button class="primary-action" type="button" data-confirm-notification-delete>
-          <i data-lucide="trash-2" aria-hidden="true"></i>Delete
-        </button>
+      <div class="notification-delete-content">
+        <h2 id="notification-delete-heading">Delete message?</h2>
+        <p class="notification-delete-title" data-notification-delete-title></p>
+        <p>This removes it from your inbox only.</p>
+        <p class="fine-print" data-notification-delete-error role="alert" hidden></p>
+        <div class="notification-delete-actions">
+          <button class="secondary-action" type="button" data-cancel-notification-delete autofocus>Cancel</button>
+          <button class="primary-action" type="button" data-confirm-notification-delete>
+            <i data-lucide="trash-2" aria-hidden="true"></i>Delete
+          </button>
+        </div>
       </div>
     </dialog>
 
