@@ -32,7 +32,8 @@ test("Supabase inbox excludes saved deletions on every reload and across databas
       return new Response(JSON.stringify([stored]), { status: 201 });
     }
     if (url.searchParams.get("select") === "id") return new Response(JSON.stringify([{ id: "old-message" }]));
-    const scopedMember = JSON.parse(url.searchParams.get("vip_notification_reads.member_id").slice(3));
+    // Plain PostgREST equality values are literal, unlike values inside OR/IN.
+    const scopedMember = url.searchParams.get("vip_notification_reads.member_id").slice(3);
     return new Response(JSON.stringify(source.map((row) => ({ ...row,
       vip_notification_reads: [...receipts.values()].filter((receipt) =>
         receipt.notification_id === row.id && receipt.member_id === scopedMember),
@@ -47,6 +48,25 @@ test("Supabase inbox excludes saved deletions on every reload and across databas
   }
   assert.equal(receipts.get("member-a:old-message").read_at, "2026-10-21T12:00:00Z");
   assert.equal(source.length, 1);
+});
+
+test("Supabase equality filters preserve member-ID punctuation without injecting query parameters", async (t) => {
+  const memberId = 'member,("quoted")\\&vip_notification_reads.member_id=eq.other';
+  t.mock.method(globalThis, "fetch", async (value) => {
+    const params = new URL(value).searchParams;
+    assert.deepEqual(params.getAll("vip_notification_reads.member_id"), [`eq.${memberId}`]);
+    const scopedMember = params.get("vip_notification_reads.member_id").slice(3);
+    const rows = [
+      { id: "read", read_at: "2026-10-22T12:00:00Z", deleted_at: null },
+      { id: "deleted", read_at: "2026-10-22T12:00:00Z", deleted_at: "2026-10-22T18:00:00Z" },
+    ];
+    return new Response(JSON.stringify(rows.map((row) => ({ id: row.id, member_id: null,
+      vip_notification_reads: scopedMember === memberId ? [{ member_id: memberId, ...row }] : [],
+    }))));
+  });
+  const inbox = await database().listNotifications(memberId);
+  assert.deepEqual(inbox.map((item) => item.id), ["read"]);
+  assert.equal(inbox[0].readAt, "2026-10-22T12:00:00Z");
 });
 
 test("Supabase fills the inbox past whole pages of deletions without applying another member's receipts", async (t) => {

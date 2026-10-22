@@ -41,7 +41,7 @@ test("inbox isolates targeted notices and remembers read state per member", asyn
   } finally { await rm(rootDir, { recursive: true, force: true }); }
 });
 
-test("Supabase inbox scopes embedded read receipts and safely quotes member IDs", async (t) => {
+test("Supabase inbox uses literal member IDs for equality and quotes IDs only inside OR logic", async (t) => {
   const previousUrl = process.env.SUPABASE_URL;
   const previousKey = process.env.SUPABASE_SECRET_KEY;
   process.env.SUPABASE_URL = "https://database.example";
@@ -63,7 +63,7 @@ test("Supabase inbox scopes embedded read receipts and safely quotes member IDs"
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url.searchParams.get("select"), "*,vip_notification_reads(member_id,read_at,deleted_at)");
   assert.equal(calls[0].url.searchParams.get("or"), '(member_id.is.null,member_id.eq."member-a,(\\"quoted\\")")');
-  assert.equal(calls[0].url.searchParams.get("vip_notification_reads.member_id"), 'eq."member-a,(\\"quoted\\")"');
+  assert.equal(calls[0].url.searchParams.get("vip_notification_reads.member_id"), `eq.${memberId}`);
   assert.equal(calls[0].url.searchParams.get("order"), "created_at.desc,id.desc");
   assert.equal(calls[0].url.searchParams.get("offset"), "0");
 });

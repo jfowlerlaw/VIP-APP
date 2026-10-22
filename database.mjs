@@ -271,7 +271,8 @@ export function createDatabase({ rootDir, seedDatabase }) {
         query: queryString({
           select: "*,vip_notification_reads(member_id,read_at,deleted_at)",
           or: `(member_id.is.null,member_id.eq.${quotedMemberId})`,
-          "vip_notification_reads.member_id": `eq.${quotedMemberId}`,
+          // Plain equality keeps quotes literally; only OR/IN values need quoting.
+          "vip_notification_reads.member_id": `eq.${memberId}`,
           order: "created_at.desc,id.desc", limit: String(pageSize), offset: String(offset),
         }),
       });
