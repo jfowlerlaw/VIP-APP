@@ -24,6 +24,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
     listNotifications,
     createNotification,
     markNotificationsRead,
+    deleteNotification,
     listPerks,
     createPerk,
     updatePerk,
@@ -252,7 +253,9 @@ export function createDatabase({ rootDir, seedDatabase }) {
     if (!supabase) {
       const db = await readLocalDb();
       return (db.notifications || [])
-        .filter((item) => !item.memberId || item.memberId === memberId)
+        .filter((item) => (!item.memberId || item.memberId === memberId) && !(db.notificationReads || []).some(
+          (read) => read.memberId === memberId && read.notificationId === item.id && read.deletedAt,
+        ))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 200)
         .map((item) => ({ ...item, readAt: (db.notificationReads || []).find(
@@ -262,9 +265,12 @@ export function createDatabase({ rootDir, seedDatabase }) {
     const quotedMemberId = `"${String(memberId).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     const rows = await supabaseRequest("vip_notifications", {
       query: queryString({
-        select: "*,vip_notification_reads(read_at)",
+        select: "*,vip_notification_reads(read_at),deleted:vip_notification_reads()",
         or: `(member_id.is.null,member_id.eq.${quotedMemberId})`,
         "vip_notification_reads.member_id": `eq.${quotedMemberId}`,
+        "deleted.member_id": `eq.${quotedMemberId}`,
+        "deleted.deleted_at": "not.is.null",
+        deleted: "is.null",
         order: "created_at.desc", limit: "200",
       }),
     });
@@ -310,6 +316,33 @@ export function createDatabase({ rootDir, seedDatabase }) {
       body: notificationIds.map((notificationId) => ({ notification_id: notificationId, member_id: memberId, read_at: readAt })),
       headers: { Prefer: "resolution=ignore-duplicates" },
     });
+  }
+
+  async function deleteNotification(memberId, notificationId) {
+    const deletedAt = new Date().toISOString();
+    if (!supabase) {
+      const db = await readLocalDb();
+      const notification = (db.notifications || []).find((item) => item.id === notificationId && (!item.memberId || item.memberId === memberId));
+      if (!notification) return false;
+      db.notificationReads ||= [];
+      const receipt = db.notificationReads.find((read) => read.memberId === memberId && read.notificationId === notificationId);
+      if (receipt) receipt.deletedAt ||= deletedAt;
+      else db.notificationReads.push({ memberId, notificationId, readAt: deletedAt, deletedAt });
+      await writeLocalDb(db);
+      return true;
+    }
+    const quotedMemberId = `"${String(memberId).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    const rows = await supabaseRequest("vip_notifications", {
+      query: queryString({ select: "id", id: `eq.${notificationId}`,
+        or: `(member_id.is.null,member_id.eq.${quotedMemberId})` }),
+    });
+    if (!rows.length) return false;
+    await supabaseRequest("vip_notification_reads", {
+      method: "POST",
+      body: { notification_id: notificationId, member_id: memberId, deleted_at: deletedAt },
+      headers: { Prefer: "resolution=merge-duplicates" },
+    });
+    return true;
   }
 
   async function listPerks({ visibleOnly = false } = {}) {

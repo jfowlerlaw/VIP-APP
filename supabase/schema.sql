@@ -93,11 +93,19 @@ create table if not exists public.vip_notification_reads (
   notification_id text not null references public.vip_notifications(id) on delete cascade,
   member_id text not null references public.vip_members(id) on delete cascade,
   read_at timestamptz not null default now(),
+  deleted_at timestamptz,
   primary key (notification_id, member_id)
 );
 
+alter table public.vip_notification_reads
+  add column if not exists deleted_at timestamptz;
+
 create index if not exists vip_notification_reads_member
   on public.vip_notification_reads (member_id);
+
+create index if not exists vip_notification_reads_member_deleted
+  on public.vip_notification_reads (member_id, notification_id)
+  where deleted_at is not null;
 
 create table if not exists public.vip_perks (
   id text primary key,

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
-const member = { name: "Avery Mitchell", email: "avery@example.com", joined: "2024" };
+const member = { id: "member-a", name: "Avery Mitchell", email: "avery@example.com", joined: "2024" };
 const feedbackType = "App feedback / bug report";
 
 function element() {
@@ -23,7 +23,14 @@ function element() {
 function client(t, fetch, { native = false } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
-    "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title"].map((key) => [key, element()]));
+    "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
+    "[data-notification-delete-dialog]", "[data-confirm-notification-delete]", "[data-cancel-notification-delete]",
+    "[data-notification-delete-title]", "[data-notification-delete-error]"].map((key) => [key, element()]));
+  const deleteDialog = elements["[data-notification-delete-dialog]"];
+  deleteDialog.showModal = () => { deleteDialog.open = true; };
+  deleteDialog.close = () => { deleteDialog.open = false; deleteDialog.listeners.close?.(); };
+  deleteDialog.querySelector = (selector) => elements[selector] || null;
+  deleteDialog.querySelectorAll = () => [elements["[data-confirm-notification-delete]"], elements["[data-cancel-notification-delete]"]];
   const targets = ["card", "perks", "events", "notifications", "concierge", "profile"];
   const nav = targets.map((target) => {
     const item = element();
@@ -205,4 +212,67 @@ test("Inbox tab selects its view and unread badge follows reads, mark-all, large
   assert.equal(badge.hidden, true);
   assert.equal(tab.attributes["aria-current"], undefined);
   assert.equal(c.elements['[data-view-target="card"]'].attributes["aria-current"], "page");
+});
+
+test("deletion requires confirmation, preserves messages on failure, and updates unread count on success", async (t) => {
+  let fail = true;
+  let deleted = false;
+  let calls = 0;
+  const notices = [{ id: "old", title: "Old message", readAt: null }, { id: "keep", title: "Keep me", readAt: "2026-10-21T12:00:00Z" }];
+  const c = client(t, async (path, options) => {
+    if (options.method === "DELETE") {
+      calls++;
+      if (fail) return new Response(JSON.stringify({ message: "Please try again." }), { status: 503 });
+      deleted = true;
+    }
+    if (path === "/api/notifications") return new Response(JSON.stringify({ notifications: notices.filter((item) => !deleted || item.id !== "old") }));
+    return success(path);
+  });
+  await c.run("bootBetaApi()");
+  await c.run("loadInbox()");
+  const dialog = c.elements["[data-notification-delete-dialog]"];
+  const badge = c.elements["[data-unread-count]"];
+  c.run("requestNotificationDeletion(inboxNotifications[0])");
+  assert.equal(dialog.open, true);
+  assert.equal(c.elements["[data-notification-delete-title]"].textContent, "Old message");
+  c.elements["[data-cancel-notification-delete]"].listeners.click();
+  await c.run("deleteSelectedNotification()");
+  assert.equal(calls, 0);
+  c.run("requestNotificationDeletion(inboxNotifications[0])");
+  await c.elements["[data-confirm-notification-delete]"].listeners.click();
+  assert.equal(dialog.open, true);
+  assert.equal(badge.textContent, "1");
+  assert.equal(c.elements["[data-notification-delete-error]"].textContent, "Please try again.");
+  assert.equal(c.elements["[data-confirm-notification-delete]"].disabled, false);
+  fail = false;
+  await c.elements["[data-confirm-notification-delete]"].listeners.click();
+  assert.equal(dialog.open, false);
+  assert.equal(badge.hidden, true);
+  assert.equal(c.elements["[data-refresh-inbox]"].focused, true);
+  await c.run("loadInbox()");
+  assert.equal(c.run("inboxNotifications.length"), 1);
+  assert.equal(c.run("inboxNotifications[0].id"), "keep");
+});
+
+test("a stale inbox refresh cannot reinsert a message after deletion", async (t) => {
+  let waitForRefresh = false;
+  let resolveRefresh;
+  const payload = { notifications: [{ id: "old", title: "Old message", readAt: null }] };
+  const c = client(t, async (path) => {
+    if (path === "/api/notifications") {
+      if (waitForRefresh) return new Promise((resolve) => { resolveRefresh = resolve; });
+      return new Response(JSON.stringify(payload));
+    }
+    return success(path);
+  });
+  await c.run("bootBetaApi()");
+  await c.run("loadInbox()");
+  waitForRefresh = true;
+  const refresh = c.run("loadInbox()");
+  c.run("requestNotificationDeletion(inboxNotifications[0])");
+  await c.run("deleteSelectedNotification()");
+  resolveRefresh(new Response(JSON.stringify(payload)));
+  await refresh;
+  assert.equal(c.run("inboxNotifications.length"), 0);
+  assert.equal(c.elements["[data-unread-count]"].hidden, true);
 });

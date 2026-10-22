@@ -61,9 +61,12 @@ test("Supabase inbox scopes embedded read receipts and safely quotes member IDs"
   const notices = await db.listNotifications(memberId);
   assert.equal(notices[0].readAt, "2026-10-15T13:00:00Z");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url.searchParams.get("select"), "*,vip_notification_reads(read_at)");
+  assert.equal(calls[0].url.searchParams.get("select"), "*,vip_notification_reads(read_at),deleted:vip_notification_reads()");
   assert.equal(calls[0].url.searchParams.get("or"), '(member_id.is.null,member_id.eq."member-a,(\\"quoted\\")")');
   assert.equal(calls[0].url.searchParams.get("vip_notification_reads.member_id"), 'eq."member-a,(\\"quoted\\")"');
+  assert.equal(calls[0].url.searchParams.get("deleted.member_id"), 'eq."member-a,(\\"quoted\\")"');
+  assert.equal(calls[0].url.searchParams.get("deleted.deleted_at"), "not.is.null");
+  assert.equal(calls[0].url.searchParams.get("deleted"), "is.null");
 });
 
 test("API publishes without APNs, authenticates inbox access, persists reads and edits events", async () => {
@@ -259,4 +262,96 @@ test("Supabase preserves the no-button destination when storing and loading anno
   const notices = await db.listNotifications("member-a");
   assert.equal(notices[0].actionView, "none");
   assert.equal(notices[0].body, "General update");
+});
+
+test("notification deletion is private, idempotent, persistent, and rejects other members' messages", async () => {
+  const server = await startTestServer();
+  const request = (path, { method = "GET", token, cookie, body } = {}) => fetch(server.origin + path, {
+    method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  try {
+    const a = await signInMember(server.origin);
+    const b = await signInMember(server.origin, "jordan@example.com", "Rivera");
+    const login = await request("/api/admin/login", { method: "POST", body: { password: "local-feature-test" } });
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const published = await request("/api/admin/push/broadcast", { method: "POST", cookie, body: { title: "Old update", message: "Member news", actionView: "none" } }).then((r) => r.json());
+    const path = `/api/notifications/${published.notificationId}`;
+    assert.equal((await request(path, { method: "DELETE" })).status, 401);
+    assert.equal((await request("/api/notifications/missing", { method: "DELETE", token: a.sessionToken })).status, 404);
+    assert.equal((await request(path, { method: "DELETE", token: a.sessionToken, body: { memberId: b.member.id } })).status, 200);
+    assert.equal((await request(path, { method: "DELETE", token: a.sessionToken })).status, 200);
+    assert.deepEqual((await request("/api/notifications", { token: a.sessionToken }).then((r) => r.json())).notifications, []);
+    const bInbox = await request("/api/notifications", { token: b.sessionToken }).then((r) => r.json());
+    assert.equal(bInbox.notifications[0].id, published.notificationId);
+    assert.equal(bInbox.notifications[0].readAt, null);
+    await request("/api/notifications/read-all", { method: "POST", token: a.sessionToken });
+    assert.equal((await request(`${path}/read`, { method: "PATCH", token: a.sessionToken })).status, 404);
+    const again = await signInMember(server.origin);
+    assert.deepEqual((await request("/api/notifications", { token: again.sessionToken }).then((r) => r.json())).notifications, []);
+    const previousUrl = process.env.SUPABASE_URL;
+    process.env.SUPABASE_URL = "";
+    const db = createDatabase({ rootDir: server.directory, seedDatabase: { members: [], events: [], requests: [] } });
+    if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previousUrl;
+    await db.createNotification({ id: "b-only", title: "Private notice", body: "For Jordan", memberId: b.member.id, createdAt: new Date().toISOString() });
+    assert.equal((await request("/api/notifications/b-only", { method: "DELETE", token: a.sessionToken })).status, 404);
+    assert.ok((await db.listNotifications(b.member.id)).some((item) => item.id === "b-only"));
+    assert.equal((await request("/api/notifications/b-only", { method: "DELETE", token: b.sessionToken })).status, 200);
+    const stored = await db.readDb();
+    assert.ok(stored.notifications.some((item) => item.id === published.notificationId));
+    assert.ok(stored.notifications.some((item) => item.id === "b-only"));
+    assert.ok(stored.notificationReads.find((item) => item.memberId === a.member.id && item.notificationId === published.notificationId).deletedAt);
+  } finally { await server.close(); }
+});
+
+test("deleted messages are filtered before the inbox limit and stay deleted after later reads", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "vip-delete-test-"));
+  const previousUrl = process.env.SUPABASE_URL;
+  process.env.SUPABASE_URL = "";
+  const notifications = Array.from({ length: 202 }, (_, index) => ({ id: `notice-${index}`, title: "Update", memberId: null,
+    createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString() }));
+  const db = createDatabase({ rootDir, seedDatabase: { members: [], events: [], requests: [], notifications } });
+  if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+  else process.env.SUPABASE_URL = previousUrl;
+  try {
+    await db.ensureDatabase();
+    await db.deleteNotification("member-a", "notice-201");
+    await db.deleteNotification("member-a", "notice-200");
+    await db.markNotificationsRead("member-a", ["notice-201"]);
+    const inbox = await db.listNotifications("member-a");
+    assert.equal(inbox.length, 200);
+    assert.ok(inbox.some((item) => item.id === "notice-0"));
+    assert.ok(inbox.every((item) => !["notice-201", "notice-200"].includes(item.id)));
+    assert.ok((await db.listNotifications("member-b")).some((item) => item.id === "notice-201"));
+  } finally { await rm(rootDir, { recursive: true, force: true }); }
+});
+
+test("Supabase deletion checks ownership then saves only that member's receipt", async (t) => {
+  const previousUrl = process.env.SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SECRET_KEY;
+  process.env.SUPABASE_URL = "https://database.example";
+  process.env.SUPABASE_SECRET_KEY = "test-only";
+  const db = createDatabase({ rootDir: tmpdir(), seedDatabase: {} });
+  if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+  else process.env.SUPABASE_URL = previousUrl;
+  if (previousKey === undefined) delete process.env.SUPABASE_SECRET_KEY;
+  else process.env.SUPABASE_SECRET_KEY = previousKey;
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url: new URL(url), options });
+    if (options.method === "POST") return new Response(null, { status: 201 });
+    return new Response(JSON.stringify(new URL(url).searchParams.get("id") === "eq.visible" ? [{ id: "visible" }] : []));
+  });
+  assert.equal(await db.deleteNotification('member-a,("quoted")', "visible"), true);
+  assert.equal(calls[0].url.searchParams.get("or"), '(member_id.is.null,member_id.eq."member-a,(\\"quoted\\")")');
+  assert.equal(calls[1].url.pathname, "/rest/v1/vip_notification_reads");
+  const body = JSON.parse(calls[1].options.body);
+  assert.equal(body.member_id, 'member-a,("quoted")');
+  assert.equal(body.notification_id, "visible");
+  assert.ok(Number.isFinite(Date.parse(body.deleted_at)));
+  assert.equal(calls[1].options.headers.Prefer, "resolution=merge-duplicates");
+  assert.equal(await db.deleteNotification("member-a", "not-owned"), false);
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((call) => call.options.method !== "DELETE"));
 });

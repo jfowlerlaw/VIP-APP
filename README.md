@@ -139,6 +139,8 @@ In Admin > Notifications, **Publish Announcement** saves a message to all member
 
 The member inbox opens from the **Inbox** tab in the bottom navigation. A badge on its icon shows unread messages (99+ for larger counts) and disappears when there are none. Opening a message marks it read; **Mark all read** clears the unread count. The inbox refreshes when opened, when the app returns to the foreground, or when a foreground push arrives. It shows the newest 200 announcements.
 
+Members can use the trash icon beside a message and confirm **Delete** to remove it from their own inbox. Other members keep their copies. Deletions persist across devices and sign-ins, and deleting an unread message updates the badge. Before deploying this feature to an existing Supabase project, run `supabase/add_notification_deletion.sql`. Publish a new iOS build to deliver the delete controls to TestFlight users.
+
 In Admin > Events, add or edit an image URL, venue, street address, and start/end times. Date/time fields use the admin browser's displayed time zone; the server stores the exact UTC times. Confirmed times enable an **Add to Calendar** link, which exports a standard `.ics` file. Unconfirmed events keep their date label without guessing a year or duration for a calendar entry. Directions open the venue address in Maps on iPhone or Google Maps on the web.
 
 The VIP card responds to pointer/touch movement and taps. On supported phones, tapping the card requests orientation permission and then enables the tilt effect. Touch interaction still works if permission is declined or unavailable. Reduced-motion preferences disable the effect.

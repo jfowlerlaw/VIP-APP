@@ -959,6 +959,73 @@ p {
   overflow-wrap: anywhere;
 }
 
+.inbox-message-row {
+  position: relative;
+  min-width: 0;
+}
+
+.inbox-delete-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.inbox-delete-button:hover,
+.inbox-delete-button:focus-visible {
+  color: var(--red);
+}
+
+.inbox-message-row .inbox-message summary {
+  padding-right: 64px;
+}
+
+.notification-delete-dialog {
+  width: min(360px, calc(100vw - 32px));
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.notification-delete-dialog[open] {
+  display: grid;
+  gap: 14px;
+}
+
+.notification-delete-dialog::backdrop {
+  background: var(--overlay-bg);
+}
+
+.notification-delete-dialog h2 {
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+
+.notification-delete-dialog p {
+  margin: 0;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.notification-delete-title {
+  font-weight: 800;
+}
+
+.notification-delete-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.notification-delete-actions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .inbox-message.is-unread {
   border-left: 3px solid var(--red);
 }

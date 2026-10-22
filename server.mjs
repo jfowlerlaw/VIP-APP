@@ -278,6 +278,21 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "DELETE" && /^\/api\/notifications\/[^/]+$/.test(url.pathname)) {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Not signed in" });
+      return;
+    }
+    const id = decodeURIComponent(url.pathname.split("/")[3]);
+    if (!await vipDb.deleteNotification(member.id, id)) {
+      sendJson(res, 404, { message: "Notification not found." });
+      return;
+    }
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (route === "GET /api/notifications" || route === "POST /api/notifications/read-all" ||
       (req.method === "PATCH" && /^\/api\/notifications\/[^/]+\/read$/.test(url.pathname))) {
     const member = await requireMember(req);

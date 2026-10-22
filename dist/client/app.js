@@ -14,6 +14,9 @@ const retryLaunchButton = document.querySelector("[data-retry-launch]");
 const appVersionLabel = document.querySelector("[data-app-version]");
 const inboxList = document.querySelector("[data-inbox-list]");
 const markAllReadButton = document.querySelector("[data-mark-all-read]");
+const notificationDeleteDialog = document.querySelector("[data-notification-delete-dialog]");
+const confirmNotificationDelete = document.querySelector("[data-confirm-notification-delete]");
+const cancelNotificationDelete = document.querySelector("[data-cancel-notification-delete]");
 const claimForm = document.querySelector("[data-claim-form]");
 const codeForm = document.querySelector("[data-code-form]");
 const claimMessage = document.querySelector("[data-claim-message]");
@@ -74,6 +77,8 @@ let pendingNotificationId = null;
 let inboxLoading = false;
 let inboxLoaded = false;
 let inboxError = false;
+let pendingNotificationDeletion = null;
+let notificationDeletionInFlight = false;
 
 function normalizeThemePreference(preference) {
   return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
@@ -741,6 +746,8 @@ function resetMemberAuth() {
   inboxLoading = false;
   inboxLoaded = false;
   inboxError = false;
+  pendingNotificationDeletion = null;
+  if (notificationDeleteDialog?.open) notificationDeleteDialog.close();
   inboxList?.removeAttribute("aria-busy");
   renderInbox();
 
@@ -863,7 +870,7 @@ function renderInbox() {
   const expanded = new Set([...inboxList.querySelectorAll("details[open]")].map((item) => item.dataset.notificationId));
   inboxList.replaceChildren();
   if (!inboxNotifications.length) {
-    inboxList.innerHTML = '<div class="inbox-empty"><i data-lucide="inbox" aria-hidden="true"></i><h2>No announcements yet</h2><p>Your VIP news and invitations will appear here.</p></div>';
+    inboxList.innerHTML = '<div class="inbox-empty"><i data-lucide="inbox" aria-hidden="true"></i><h2>Your inbox is empty</h2><p>New VIP messages will appear here.</p></div>';
   }
   for (const notification of inboxNotifications) {
     const item = document.createElement("details");
@@ -899,11 +906,73 @@ function renderInbox() {
       if (item.open && !notification.readAt) markNotificationRead(notification, item);
     });
     item.open = expanded.has(notification.id) || pendingNotificationId === notification.id;
-    inboxList.append(item);
+    const row = document.createElement("article");
+    row.className = "inbox-message-row";
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "icon-button inbox-delete-button";
+    deleteButton.setAttribute("aria-label", `Delete message: ${notification.title}`);
+    deleteButton.title = "Delete message";
+    deleteButton.innerHTML = '<i data-lucide="trash-2" aria-hidden="true"></i>';
+    deleteButton.addEventListener("click", () => requestNotificationDeletion(notification));
+    row.append(item, deleteButton);
+    inboxList.append(row);
   }
   pendingNotificationId = null;
   window.lucide?.createIcons();
 }
+
+function requestNotificationDeletion(notification) {
+  if (!notificationDeleteDialog || !activeMember || notificationDeletionInFlight) return;
+  pendingNotificationDeletion = notification;
+  const title = notificationDeleteDialog.querySelector("[data-notification-delete-title]");
+  const error = notificationDeleteDialog.querySelector("[data-notification-delete-error]");
+  if (title) title.textContent = notification.title;
+  if (error) error.hidden = true;
+  notificationDeleteDialog.showModal();
+}
+
+async function deleteSelectedNotification() {
+  const notification = pendingNotificationDeletion;
+  const memberId = activeMember?.id;
+  if (!notification || !activeMember || notificationDeletionInFlight) return;
+  notificationDeletionInFlight = true;
+  notificationDeleteDialog?.setAttribute("aria-busy", "true");
+  const controls = notificationDeleteDialog?.querySelectorAll("button") || [];
+  controls.forEach((button) => { button.disabled = true; });
+  try {
+    await apiRequest(`/api/notifications/${encodeURIComponent(notification.id)}`, { method: "DELETE" });
+    if (activeMember?.id !== memberId) return;
+    inboxRequestId += 1;
+    inboxLoading = false;
+    inboxList?.removeAttribute("aria-busy");
+    inboxNotifications = inboxNotifications.filter((item) => item.id !== notification.id);
+    renderInbox();
+    notificationDeleteDialog?.close();
+    showToast("Message deleted.");
+    document.querySelector("[data-refresh-inbox]")?.focus();
+  } catch (error) {
+    if (activeMember?.id !== memberId) return;
+    const message = notificationDeleteDialog?.querySelector("[data-notification-delete-error]");
+    if (message) {
+      message.textContent = error.message || "The message could not be deleted. Please try again.";
+      message.hidden = false;
+    }
+  } finally {
+    notificationDeletionInFlight = false;
+    notificationDeleteDialog?.removeAttribute("aria-busy");
+    controls.forEach((button) => { button.disabled = false; });
+  }
+}
+
+confirmNotificationDelete?.addEventListener("click", deleteSelectedNotification);
+cancelNotificationDelete?.addEventListener("click", () => {
+  if (!notificationDeletionInFlight) notificationDeleteDialog?.close();
+});
+notificationDeleteDialog?.addEventListener("cancel", (event) => {
+  if (notificationDeletionInFlight) event.preventDefault();
+});
+notificationDeleteDialog?.addEventListener("close", () => { pendingNotificationDeletion = null; });
 
 async function loadInbox() {
   if (!activeMember || !betaApiReady) return;
@@ -947,7 +1016,9 @@ async function markNotificationRead(notification, item) {
     item.querySelector("[data-read-state]").textContent = "Read";
     updateInboxBadges();
   } catch (error) {
-    if (activeMember?.id === memberId) showToast("Could not mark this announcement as read. Please try again.");
+    if (activeMember?.id === memberId && inboxNotifications.some((item) => item.id === notification.id)) {
+      showToast("Could not mark this announcement as read. Please try again.");
+    }
   }
 }
 
