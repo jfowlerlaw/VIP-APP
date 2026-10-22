@@ -67,6 +67,7 @@ After at least one iPhone has enabled push notifications, open the admin dashboa
 - Members stay signed in on the same device for about 90 days unless they log out.
 - Admins sign in with `VIP_ADMIN_PASSWORD`.
 - Admins can add VIPs, import CSV rows, publish event links, manage member perks, and review concierge requests.
+- In Admin > Members, the pencil button edits a VIP's first and last name. **Update name on VIP card** also replaces the printed card name; leave it unchecked to keep a customized card name. Last-name corrections apply to future sign-ins, while existing sessions stay signed in. No database migration is required.
 - Member card names and concierge requests persist in Supabase when configured, otherwise in `data/vip-db.json`.
 - Verification codes and concierge requests submit through the beta server. When SendGrid is configured, verification codes email the VIP and concierge requests email `vip@justcallmoe.com` without opening the user's mail app.
 - Set `SENDGRID_API_KEY`, `VIP_FROM_EMAIL`, and `VIP_REQUEST_EMAIL` in `.env` to turn on automatic email delivery.

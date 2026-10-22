@@ -723,6 +723,42 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
       </form>
     </dialog>
 
+    <dialog class="admin-dialog" id="edit-member-dialog" aria-labelledby="edit-member-dialog-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">VIP Member</p>
+          <h2 id="edit-member-dialog-title">Edit Name</h2>
+          <p class="fine-print neutral" data-edit-member-contact></p>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <form class="stack-form" data-edit-member-form>
+        <input type="hidden" name="id">
+        <label>
+          First name
+          <input name="firstName" autocomplete="given-name" required maxlength="100" autofocus>
+        </label>
+        <label>
+          Last name
+          <input name="lastName" autocomplete="family-name" required maxlength="100">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="updateCardName" checked>
+          Update name on VIP card
+        </label>
+        <p class="fine-print" data-edit-member-error role="status" hidden></p>
+        <div class="button-row">
+          <button class="ghost-button" type="button" data-close-dialog>Cancel</button>
+          <button class="primary-button" type="submit">
+            <i data-lucide="save" aria-hidden="true"></i>
+            Save Name
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   </body>
 </html>

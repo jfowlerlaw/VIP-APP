@@ -3,6 +3,8 @@ const navButtons = document.querySelectorAll("[data-section-target]");
 const sections = document.querySelectorAll(".admin-section");
 const toast = document.querySelector(".toast");
 const memberTable = document.querySelector("[data-member-table]");
+const editMemberDialog = document.querySelector("#edit-member-dialog");
+const editMemberForm = document.querySelector("[data-edit-member-form]");
 const eventTable = document.querySelector("[data-event-table]");
 const previewName = document.querySelector("[data-preview-name]");
 const previewMember = document.querySelector("[data-preview-member]");
@@ -305,6 +307,7 @@ function addMemberRow(member, status = "Active", placement = "prepend") {
     <td><span class="status-pill active"></span></td>
     <td>
       <div class="row-actions">
+        <button class="icon-button" type="button" data-edit-member><i data-lucide="pencil" aria-hidden="true"></i></button>
         <button type="button" data-preview-member-action>Preview</button>
         <button class="danger-button" type="button" data-delete-member>Delete</button>
       </div>
@@ -317,13 +320,19 @@ function addMemberRow(member, status = "Active", placement = "prepend") {
   const pill = row.querySelector(".status-pill");
   pill.textContent = visibleStatus;
   pill.className = `status-pill ${statusClass(visibleStatus)}`;
-  row.querySelector("[data-preview-member-action]").addEventListener("click", () => previewCardName(name));
+  const editButton = row.querySelector("[data-edit-member]");
+  editButton.setAttribute("aria-label", `Edit name for ${name}`);
+  editButton.title = `Edit name for ${name}`;
+  editButton.addEventListener("click", () => editMemberName(member));
+  row.querySelector("[data-preview-member-action]").addEventListener("click", () => previewCardName(member.cardName || name));
   row.querySelector("[data-delete-member]").addEventListener("click", () => deleteMember(row));
   if (placement === "append") {
     memberTable.append(row);
   } else {
     memberTable.prepend(row);
+    window.lucide?.createIcons();
   }
+  return row;
 }
 
 function renderMembers(members) {
@@ -336,6 +345,29 @@ function renderMembers(members) {
   } else {
     updatePreviewCard("No member selected");
   }
+  filterMembers();
+  window.lucide?.createIcons();
+}
+
+function filterMembers() {
+  const query = document.querySelector("[data-member-search]")?.value.trim().toLowerCase() || "";
+  memberTable?.querySelectorAll("tr").forEach((row) => {
+    row.hidden = !row.textContent.toLowerCase().includes(query);
+  });
+}
+
+function editMemberName(member) {
+  if (!editMemberDialog || !editMemberForm || editMemberForm.getAttribute("aria-busy") === "true") return;
+  editMemberForm.reset();
+  editMemberForm.elements.namedItem("id").value = member.id;
+  editMemberForm.elements.namedItem("firstName").value = member.firstName || "";
+  editMemberForm.elements.namedItem("lastName").value = member.lastName || "";
+  editMemberForm.elements.namedItem("updateCardName").checked = !member.cardName || member.cardName === displayMemberName(member);
+  const contact = editMemberDialog.querySelector("[data-edit-member-contact]");
+  if (contact) contact.textContent = member.email || displayMemberName(member);
+  const error = editMemberForm.querySelector("[data-edit-member-error]");
+  if (error) error.hidden = true;
+  editMemberDialog.showModal();
 }
 
 function renderEvents(events) {
@@ -897,11 +929,47 @@ document.querySelectorAll("[data-close-dialog]").forEach((button) => {
   });
 });
 
-document.querySelector("[data-member-search]")?.addEventListener("input", (event) => {
-  const query = event.target.value.trim().toLowerCase();
-  memberTable?.querySelectorAll("tr").forEach((row) => {
-    row.hidden = !row.textContent.toLowerCase().includes(query);
-  });
+document.querySelector("[data-member-search]")?.addEventListener("input", filterMembers);
+
+editMemberDialog?.addEventListener("cancel", (event) => {
+  if (editMemberForm?.getAttribute("aria-busy") === "true") event.preventDefault();
+});
+
+editMemberForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (editMemberForm.getAttribute("aria-busy") === "true") return;
+  const data = new FormData(editMemberForm);
+  const id = String(data.get("id") || "");
+  const firstName = String(data.get("firstName") || "").trim();
+  const lastName = String(data.get("lastName") || "").trim();
+  const errorMessage = editMemberForm.querySelector("[data-edit-member-error]");
+  if (errorMessage) errorMessage.hidden = true;
+  const controls = editMemberDialog.querySelectorAll("input, button");
+  editMemberForm.setAttribute("aria-busy", "true");
+  controls.forEach((control) => { control.disabled = true; });
+  try {
+    if (!adminApiReady) throw new Error("Connect to the admin portal before saving name changes.");
+    const result = await apiRequest(`/api/admin/members/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ firstName, lastName, updateCardName: data.get("updateCardName") === "on" }),
+    });
+    const oldRow = [...memberTable.querySelectorAll("tr")].find((row) => row.dataset.memberId === id);
+    const updatedRow = addMemberRow(result.member, result.member.status, "append");
+    oldRow?.replaceWith(updatedRow);
+    filterMembers();
+    updatePreviewCard(result.member.cardName || result.member.name);
+    window.lucide?.createIcons();
+    editMemberDialog.close();
+    showToast("VIP name updated.");
+  } catch (error) {
+    if (errorMessage) {
+      errorMessage.textContent = error.message || "VIP name could not be saved.";
+      errorMessage.hidden = false;
+    }
+  } finally {
+    editMemberForm.removeAttribute("aria-busy");
+    controls.forEach((control) => { control.disabled = false; });
+  }
 });
 
 document.querySelector("[data-member-form]")?.addEventListener("submit", async (event) => {

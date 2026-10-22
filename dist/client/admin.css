@@ -252,6 +252,12 @@ td button,
   gap: 8px;
 }
 
+.row-actions .icon-button {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+}
+
 td button.danger-button,
 .push-device-list button.danger-button {
   border-color: var(--danger-border);

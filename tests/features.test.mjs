@@ -138,3 +138,71 @@ test("feedback saves sanitized build details for email and admin without changin
     assert.equal(requests.requests.find((request) => request.id === feedback.id).message, feedback.message);
   } finally { await server.close(); }
 });
+
+test("only admins can rename VIPs; names persist, existing sessions work, and card names are optional", async () => {
+  const server = await startTestServer();
+  const request = (path, { method = "GET", body, token, cookie } = {}) => fetch(server.origin + path, {
+    method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  try {
+    const session = await signInMember(server.origin);
+    const original = session.member;
+    const path = `/api/admin/members/${encodeURIComponent(original.id)}`;
+    const body = { firstName: "  Avery   Anne ", lastName: " de la Cruz ", updateCardName: true,
+      email: "should-not-change@example.com", status: "Paused", id: "different-id" };
+    assert.equal((await request(path, { method: "PATCH", body })).status, 401);
+    assert.equal((await request(path, { method: "PATCH", body, token: session.sessionToken })).status, 401);
+    const login = await request("/api/admin/login", { method: "POST", body: { password: "local-feature-test" } });
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    for (const invalid of [{ firstName: "", lastName: "Smith" }, { firstName: "Avery", lastName: " " },
+      { firstName: {}, lastName: "Smith" }, { firstName: "A".repeat(101), lastName: "Smith" }]) {
+      assert.equal((await request(path, { method: "PATCH", cookie, body: invalid })).status, 400);
+    }
+    assert.equal((await request("/api/admin/members/missing", { method: "PATCH", cookie, body })).status, 404);
+    const edited = await request(path, { method: "PATCH", cookie, body });
+    assert.equal(edited.status, 200);
+    const member = (await edited.json()).member;
+    assert.equal(member.name, "Avery Anne de la Cruz");
+    assert.equal(member.firstName, "Avery Anne");
+    assert.equal(member.lastName, "de la Cruz");
+    assert.equal(member.cardName, member.name);
+    for (const field of ["id", "email", "phone", "status", "memberId", "claimedAt"]) assert.equal(member[field], original[field]);
+    const me = await request("/api/me", { token: session.sessionToken }).then((r) => r.json());
+    assert.equal(me.member.name, member.name);
+    const listed = await request("/api/admin/members", { cookie }).then((r) => r.json());
+    assert.equal(listed.members.find((item) => item.id === original.id).name, member.name);
+    assert.equal((await request("/api/claim/start", { method: "POST", body: { identity: original.email, lastName: "Mitchell" } })).status, 404);
+    assert.equal((await request("/api/claim/start", { method: "POST", body: { identity: original.email, lastName: "de la Cruz" } })).status, 200);
+    const keptCard = await request(path, { method: "PATCH", cookie, body: { firstName: "Avery", lastName: "O'Neil-Smith", updateCardName: false } }).then((r) => r.json());
+    assert.equal(keptCard.member.name, "Avery O'Neil-Smith");
+    assert.equal(keptCard.member.cardName, member.cardName);
+  } finally { await server.close(); }
+});
+
+test("Supabase name edits patch all name columns without unrelated member changes", async (t) => {
+  const previousUrl = process.env.SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SECRET_KEY;
+  process.env.SUPABASE_URL = "https://database.example";
+  process.env.SUPABASE_SECRET_KEY = "test-only";
+  const db = createDatabase({ rootDir: tmpdir(), seedDatabase: {} });
+  if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+  else process.env.SUPABASE_URL = previousUrl;
+  if (previousKey === undefined) delete process.env.SUPABASE_SECRET_KEY;
+  else process.env.SUPABASE_SECRET_KEY = previousKey;
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push({ url: new URL(url), options, body });
+    return new Response(JSON.stringify([{ id: "member-a", ...body, card_name: body.card_name || "Custom Card Name" }]));
+  });
+  const patch = { firstName: "Ren\u00e9e", lastName: "de la Cruz", name: "Ren\u00e9e de la Cruz" };
+  const kept = await db.updateMember("member-a", patch);
+  assert.equal(kept.name, patch.name);
+  assert.equal(kept.cardName, "Custom Card Name");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.equal(calls[0].url.searchParams.get("id"), "eq.member-a");
+  assert.deepEqual(calls[0].body, { first_name: patch.firstName, last_name: patch.lastName, name: patch.name });
+  await db.updateMember("member-a", { ...patch, cardName: patch.name });
+  assert.equal(calls[1].body.card_name, patch.name);
+});

@@ -693,6 +693,30 @@ async function handleAdminApi(req, res, url) {
     return;
   }
 
+  if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/members/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/admin/members/", ""));
+    const body = await readJsonBody(req);
+    const firstName = typeof body.firstName === "string" ? body.firstName.trim().replace(/\s+/g, " ") : "";
+    const lastName = typeof body.lastName === "string" ? body.lastName.trim().replace(/\s+/g, " ") : "";
+    if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100) {
+      sendJson(res, 400, { message: "Enter a first and last name, each 100 characters or fewer." });
+      return;
+    }
+    const name = `${firstName} ${lastName}`;
+    const member = await vipDb.updateMember(id, {
+      firstName,
+      lastName,
+      name,
+      ...(body.updateCardName === true ? { cardName: name } : {}),
+    });
+    if (!member) {
+      sendJson(res, 404, { message: "Member not found." });
+      return;
+    }
+    sendJson(res, 200, { member: publicMember(member) });
+    return;
+  }
+
   if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/members/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/admin/members/", ""));
     const result = await vipDb.deleteMember(id);
