@@ -644,9 +644,9 @@ p {
 .etched-name {
   position: absolute;
   left: 5.6%;
-  bottom: 6.4%;
+  right: 5.6%;
+  bottom: 4%;
   display: block;
-  width: 32%;
   color: rgba(232, 232, 232, 0.62);
   font-family: Georgia, "Times New Roman", serif;
   font-size: 0.86rem;
@@ -661,8 +661,6 @@ p {
   opacity: 0.82;
   pointer-events: none;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .primary-action,

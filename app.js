@@ -648,7 +648,35 @@ function activateView(target, title) {
   if (viewTitle) {
     viewTitle.textContent = target === "card" ? cardScreenTitle() : title;
   }
+  if (target === "card") fitCardName();
   if (target === "notifications" && activeMember) loadInbox();
+}
+
+function fitCardName() {
+  if (!etchedName) return;
+  etchedName.style.fontSize = "";
+  const available = etchedName.clientWidth;
+  if (!available || etchedName.scrollWidth <= available) return;
+  let lower = 1;
+  let upper = Number.parseFloat(window.getComputedStyle(etchedName).fontSize);
+  // Measure rendered glyphs rather than guessing width from the name's length.
+  for (let step = 0; step < 10; step += 1) {
+    const size = (lower + upper) / 2;
+    etchedName.style.fontSize = `${size}px`;
+    if (etchedName.scrollWidth <= available) lower = size;
+    else upper = size;
+  }
+  etchedName.style.fontSize = `${Math.floor(lower * 100) / 100}px`;
+}
+
+function setupCardNameFitting() {
+  if (!etchedName) return;
+  if (window.ResizeObserver) {
+    new window.ResizeObserver(fitCardName).observe(etchedName.parentElement);
+  }
+  window.addEventListener("resize", fitCardName);
+  document.fonts?.ready.then(fitCardName);
+  fitCardName();
 }
 
 function updateMemberName(name) {
@@ -659,6 +687,7 @@ function updateMemberName(name) {
 
   if (etchedName) {
     etchedName.textContent = cleanName;
+    fitCardName();
   }
 
   if (avatar) {
@@ -1758,6 +1787,7 @@ window.addEventListener("DOMContentLoaded", () => {
   updatePushSetting();
   attachPushListeners();
   setupInteractiveCard();
+  setupCardNameFitting();
   updateAppVersion();
   bootBetaApi();
 });

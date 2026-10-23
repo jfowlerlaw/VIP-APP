@@ -10,7 +10,7 @@ const feedbackType = "App feedback / bug report";
 function element() {
   const classes = new Set();
   return {
-    dataset: {}, attributes: {}, listeners: {}, children: [], hidden: false, textContent: "", value: "",
+    dataset: {}, attributes: {}, listeners: {}, children: [], hidden: false, textContent: "", value: "", style: { fontSize: "" },
     classList: { add: (...names) => names.forEach((name) => classes.add(name)), remove: (...names) => names.forEach((name) => classes.delete(name)), contains: (name) => classes.has(name),
       toggle: (name, selected) => selected ? classes.add(name) : classes.delete(name) },
     setAttribute(name, value) { this.attributes[name] = value; if (name === "hidden") this.hidden = true; },
@@ -20,12 +20,20 @@ function element() {
   };
 }
 
-function client(t, fetch, { native = false } = {}) {
+function client(t, fetch, { native = false, cardNameWidth = null } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
     "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
     "[data-notification-delete-dialog]", "[data-confirm-notification-delete]", "[data-cancel-notification-delete]",
     "[data-notification-delete-title]", "[data-notification-delete-error]"].map((key) => [key, element()]));
+  if (cardNameWidth !== null) {
+    const name = element();
+    name.clientWidth = cardNameWidth;
+    name.parentElement = element();
+    Object.defineProperty(name, "scrollWidth", { get: () => Math.max(name.clientWidth,
+      Math.ceil(name.textContent.length * Number.parseFloat(name.style.fontSize || "14") * 0.6)) });
+    elements[".etched-name"] = name;
+  }
   const deleteDialog = elements["[data-notification-delete-dialog]"];
   deleteDialog.showModal = () => { deleteDialog.open = true; };
   deleteDialog.close = () => { deleteDialog.open = false; deleteDialog.listeners.close?.(); };
@@ -67,6 +75,7 @@ function client(t, fetch, { native = false } = {}) {
     window: {
       location: { protocol: native ? "capacitor:" : "http:" },
       matchMedia: () => ({ matches: false, addEventListener() {} }),
+      getComputedStyle: () => ({ fontSize: "14px" }),
       addEventListener: (name, listener) => { listeners[name] = listener; },
       setTimeout: (fn, delay) => { const timer = setTimeout(fn, delay); timers.add(timer); return timer; },
       clearTimeout,
@@ -81,6 +90,43 @@ function client(t, fetch, { native = false } = {}) {
 function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
+
+test("card names retain every character and shrink only when rendered text overflows", (t) => {
+  const c = client(t, success, { cardNameWidth: 250 });
+  const name = c.elements[".etched-name"];
+  for (const fullName of ["Josh Fowler", "Alexandria Catherine Montgomery-Sutherland", "W".repeat(200), ""]) {
+    c.context.fullName = fullName;
+    c.run("updateMemberName(fullName)");
+    assert.equal(name.textContent, fullName || "VIP Member");
+    assert.ok(name.scrollWidth <= name.clientWidth);
+  }
+  c.run('updateMemberName("Josh Fowler")');
+  assert.equal(name.style.fontSize, "");
+});
+
+test("card names refit after hidden profile edits, returning to Card, and container resizing", (t) => {
+  const c = client(t, success, { cardNameWidth: 0 });
+  const name = c.elements[".etched-name"];
+  c.run('updateMemberName("Alexandria Catherine Montgomery-Sutherland")');
+  assert.equal(name.style.fontSize, "");
+  name.clientWidth = 200;
+  c.run('activateView("card", "Card")');
+  assert.ok(name.scrollWidth <= name.clientWidth);
+  let onResize;
+  c.context.window.ResizeObserver = class {
+    constructor(callback) { onResize = callback; }
+    observe(target) { assert.equal(target, name.parentElement); }
+  };
+  c.run("setupCardNameFitting()");
+  const oldSize = Number.parseFloat(name.style.fontSize);
+  name.clientWidth = 140;
+  onResize();
+  assert.ok(Number.parseFloat(name.style.fontSize) < oldSize);
+  assert.ok(name.scrollWidth <= name.clientWidth);
+  name.clientWidth = 500;
+  c.listeners.resize();
+  assert.equal(name.style.fontSize, "");
+});
 
 test("startup preserves saved login through server/session failures and retry restores the member", async (t) => {
   for (const failAt of ["/api/health", "/api/me"]) {
