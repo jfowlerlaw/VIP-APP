@@ -5,6 +5,7 @@ const toast = document.querySelector(".toast");
 const conciergeForms = document.querySelectorAll("[data-concierge-form]");
 const cardNameInput = document.querySelector("[data-name-input]");
 const etchedName = document.querySelector(".etched-name");
+const cardNameArea = document.querySelector(".card-name-area");
 const avatar = document.querySelector(".avatar");
 const appScreen = document.querySelector(".app-screen");
 const appLoader = document.querySelector("[data-app-loader]");
@@ -653,30 +654,44 @@ function activateView(target, title) {
 }
 
 function fitCardName() {
-  if (!etchedName) return;
+  if (!etchedName || !cardNameArea) return;
   etchedName.style.fontSize = "";
-  const available = etchedName.clientWidth;
-  if (!available || etchedName.scrollWidth <= available) return;
-  let lower = 1;
+  const width = cardNameArea.clientWidth;
+  const height = cardNameArea.clientHeight;
+  if (!width || !height) return;
+  const fits = () => etchedName.scrollWidth <= width && etchedName.scrollHeight <= height;
+  if (fits()) return;
+  let lower = 0.1;
   let upper = Number.parseFloat(window.getComputedStyle(etchedName).fontSize);
   // Measure rendered glyphs rather than guessing width from the name's length.
   for (let step = 0; step < 10; step += 1) {
     const size = (lower + upper) / 2;
     etchedName.style.fontSize = `${size}px`;
-    if (etchedName.scrollWidth <= available) lower = size;
+    if (fits()) lower = size;
     else upper = size;
   }
   etchedName.style.fontSize = `${Math.floor(lower * 100) / 100}px`;
 }
 
 function setupCardNameFitting() {
-  if (!etchedName) return;
+  if (!etchedName || !cardNameArea) return;
   if (window.ResizeObserver) {
-    new window.ResizeObserver(fitCardName).observe(etchedName.parentElement);
+    new window.ResizeObserver(fitCardName).observe(cardNameArea);
   }
   window.addEventListener("resize", fitCardName);
   document.fonts?.ready.then(fitCardName);
   fitCardName();
+}
+
+function stackedCardName(name) {
+  const words = name.split(/\s+/);
+  if (words.length < 2) return name;
+  const given = String(activeMember?.firstName || "").trim().split(/\s+/).filter(Boolean);
+  const surname = String(activeMember?.lastName || "").trim().split(/\s+/).filter(Boolean);
+  const knownName = [...given, ...surname].join(" ");
+  const split = given.length && surname.length && knownName.toLowerCase() === words.join(" ").toLowerCase()
+    ? given.length : words.length - 1;
+  return `${words.slice(0, split).join(" ")}\n${words.slice(split).join(" ")}`;
 }
 
 function updateMemberName(name) {
@@ -686,7 +701,7 @@ function updateMemberName(name) {
   });
 
   if (etchedName) {
-    etchedName.textContent = cleanName;
+    etchedName.textContent = stackedCardName(cleanName);
     fitCardName();
   }
 

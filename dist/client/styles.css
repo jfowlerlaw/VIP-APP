@@ -641,18 +641,27 @@ p {
   background: var(--card-art-bg);
 }
 
-.etched-name {
+.card-name-area {
   position: absolute;
   left: 5.6%;
-  right: 5.6%;
   bottom: 4%;
+  display: flex;
+  align-items: flex-end;
+  width: 25%;
+  height: 35%;
+  pointer-events: none;
+}
+
+.etched-name {
   display: block;
+  width: 100%;
+  min-width: 0;
   color: rgba(232, 232, 232, 0.62);
   font-family: Georgia, "Times New Roman", serif;
   font-size: 0.86rem;
   font-weight: 700;
   letter-spacing: 0;
-  line-height: 1.05;
+  line-height: 1.18;
   text-align: left;
   text-shadow:
     0 1px 0 rgba(255, 255, 255, 0.12),
@@ -660,7 +669,8 @@ p {
     1px 0 0 rgba(255, 255, 255, 0.05);
   opacity: 0.82;
   pointer-events: none;
-  white-space: nowrap;
+  white-space: pre-line;
+  overflow-wrap: normal;
 }
 
 .primary-action,
