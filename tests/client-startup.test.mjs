@@ -32,15 +32,18 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
     area.clientWidth = cardNameWidth;
     area.clientHeight = cardNameHeight;
     name.parentElement = area;
+    Object.defineProperty(name, "clientWidth", { get: () => Math.floor(area.clientWidth *
+      (name.classList.contains("is-stacked") ? 25 / 32 : 1)) });
     Object.defineProperty(name, "scrollWidth", { get: () => {
       const font = Number.parseFloat(name.style.fontSize || "14");
-      const longest = Math.max(...name.textContent.split(/\s+|(?<=-)/).map((word) => word.length));
-      return Math.max(area.clientWidth, Math.ceil(longest * font * 0.6));
+      const parts = name.classList.contains("is-stacked") ? name.textContent.split(/\s+|(?<=-)/) : [name.textContent];
+      const longest = Math.max(...parts.map((word) => word.length));
+      return Math.max(name.clientWidth, Math.ceil(longest * font * 0.6));
     } });
     Object.defineProperty(name, "scrollHeight", { get: () => {
       const font = Number.parseFloat(name.style.fontSize || "14");
-      const lines = name.textContent.split("\n").reduce((count, line) => count +
-        Math.max(1, Math.ceil(line.length * font * 0.6 / Math.max(1, area.clientWidth))), 0);
+      const lines = name.classList.contains("is-stacked") ? name.textContent.split("\n").reduce((count, line) => count +
+        Math.max(1, Math.ceil(line.length * font * 0.6 / Math.max(1, name.clientWidth))), 0) : 1;
       return Math.ceil(lines * font * 1.18);
     } });
     elements[".etched-name"] = name;
@@ -103,39 +106,48 @@ function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
 
-test("stacked card names retain every character and fit the available width and height", (t) => {
-  const c = client(t, success, { cardNameWidth: 90 });
+test("card names stack only when too wide and retain every character within the available space", (t) => {
+  const c = client(t, success, { cardNameWidth: 120 });
   const name = c.elements[".etched-name"];
   const area = c.elements[".card-name-area"];
   for (const fullName of ["Josh Fowler", "Alexandria Catherine Montgomery-Sutherland", "W".repeat(200), ""]) {
     c.context.fullName = fullName;
     c.run("updateMemberName(fullName)");
     assert.equal(name.textContent.replace(/\s+/g, " "), fullName || "VIP Member");
-    assert.ok(name.scrollWidth <= area.clientWidth);
+    assert.ok(name.scrollWidth <= name.clientWidth);
     assert.ok(name.scrollHeight <= area.clientHeight);
   }
-  c.run('updateMemberName("Josh Fowler")');
-  assert.equal(name.textContent, "Josh\nFowler");
-  assert.equal(name.style.fontSize, "");
+  for (const fullName of ["Josh Fowler", "Avery Mitchell", "VIP Member"]) {
+    c.context.fullName = fullName;
+    c.run("updateMemberName(fullName)");
+    assert.equal(name.textContent, fullName);
+    assert.equal(name.classList.contains("is-stacked"), false);
+    assert.equal(name.style.fontSize, "");
+  }
+  c.run('updateMemberName("Alexandria Catherine Montgomery-Sutherland")');
+  assert.equal(name.classList.contains("is-stacked"), true);
+  assert.equal(name.textContent, "Alexandria Catherine\nMontgomery-Sutherland");
 });
 
 test("stacked names preserve known compound surnames, custom names, and single-word names", (t) => {
-  const c = client(t, success, { cardNameWidth: 90 });
+  const c = client(t, success, { cardNameWidth: 120 });
   c.run('activeMember = { firstName: "Juan Carlos", lastName: "de la Cruz" }');
   c.run('updateMemberName("Juan Carlos de la Cruz")');
   assert.equal(c.elements[".etched-name"].textContent, "Juan Carlos\nde la Cruz");
   c.run('updateMemberName("Captain Moe")');
-  assert.equal(c.elements[".etched-name"].textContent, "Captain\nMoe");
+  assert.equal(c.elements[".etched-name"].textContent, "Captain Moe");
   c.run('updateMemberName("Prince")');
   assert.equal(c.elements[".etched-name"].textContent, "Prince");
 });
 
 test("stacked names shrink for height even when both lines fit horizontally", (t) => {
-  const c = client(t, success, { cardNameWidth: 250, cardNameHeight: 25 });
+  const c = client(t, success, { cardNameWidth: 90, cardNameHeight: 25 });
   c.run('updateMemberName("Josh Fowler")');
   const name = c.elements[".etched-name"];
+  assert.equal(name.textContent, "Josh\nFowler");
   assert.ok(Number.parseFloat(name.style.fontSize) < 14);
   assert.ok(name.scrollHeight <= 25);
+  assert.ok(name.scrollWidth <= name.clientWidth);
 });
 
 test("card names refit after hidden profile edits, returning to Card, and container resizing", (t) => {
@@ -144,9 +156,11 @@ test("card names refit after hidden profile edits, returning to Card, and contai
   const area = c.elements[".card-name-area"];
   c.run('updateMemberName("Alexandria Catherine Montgomery-Sutherland")');
   assert.equal(name.style.fontSize, "");
+  assert.equal(name.classList.contains("is-stacked"), false);
   area.clientWidth = 200;
   c.run('activateView("card", "Card")');
-  assert.ok(name.scrollWidth <= area.clientWidth);
+  assert.equal(name.classList.contains("is-stacked"), true);
+  assert.ok(name.scrollWidth <= name.clientWidth);
   assert.ok(name.scrollHeight <= area.clientHeight);
   let onResize;
   c.context.window.ResizeObserver = class {
@@ -158,11 +172,19 @@ test("card names refit after hidden profile edits, returning to Card, and contai
   area.clientWidth = 50;
   onResize();
   assert.ok(Number.parseFloat(name.style.fontSize) < oldSize);
-  assert.ok(name.scrollWidth <= area.clientWidth);
+  assert.ok(name.scrollWidth <= name.clientWidth);
   assert.ok(name.scrollHeight <= area.clientHeight);
   area.clientWidth = 500;
   c.listeners.resize();
   assert.equal(name.style.fontSize, "");
+  assert.equal(name.textContent, "Alexandria Catherine Montgomery-Sutherland");
+  assert.equal(name.classList.contains("is-stacked"), false);
+  area.clientWidth = 120;
+  onResize();
+  assert.equal(name.classList.contains("is-stacked"), true);
+  assert.equal(name.textContent, "Alexandria Catherine\nMontgomery-Sutherland");
+  assert.ok(name.scrollWidth <= name.clientWidth);
+  assert.ok(name.scrollHeight <= area.clientHeight);
 });
 
 test("startup preserves saved login through server/session failures and retry restores the member", async (t) => {

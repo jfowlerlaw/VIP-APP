@@ -655,11 +655,19 @@ function activateView(target, title) {
 
 function fitCardName() {
   if (!etchedName || !cardNameArea) return;
+  const name = etchedName.dataset.fullName || etchedName.textContent.replace(/\s+/g, " ").trim();
+  etchedName.textContent = name;
+  etchedName.classList.remove("is-stacked");
   etchedName.style.fontSize = "";
   const width = cardNameArea.clientWidth;
   const height = cardNameArea.clientHeight;
   if (!width || !height) return;
-  const fits = () => etchedName.scrollWidth <= width && etchedName.scrollHeight <= height;
+  // Try the full name on one line before using the narrower stacked layout.
+  if (etchedName.scrollWidth > width && /\s/.test(name)) {
+    etchedName.classList.add("is-stacked");
+    etchedName.textContent = stackedCardName(name);
+  }
+  const fits = () => etchedName.scrollWidth <= etchedName.clientWidth && etchedName.scrollHeight <= height;
   if (fits()) return;
   let lower = 0.1;
   let upper = Number.parseFloat(window.getComputedStyle(etchedName).fontSize);
@@ -701,7 +709,8 @@ function updateMemberName(name) {
   });
 
   if (etchedName) {
-    etchedName.textContent = stackedCardName(cleanName);
+    etchedName.dataset.fullName = cleanName;
+    etchedName.textContent = cleanName;
     fitCardName();
   }
 
