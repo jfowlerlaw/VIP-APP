@@ -395,14 +395,69 @@
 
               <section class="profile-settings" aria-labelledby="profile-settings-title">
                 <h2 id="profile-settings-title">Settings</h2>
+                <details class="profile-details" data-profile-details>
+                  <summary>Personal information<i data-lucide="chevron-down" aria-hidden="true"></i></summary>
+                  <form class="profile-form" data-profile-form>
+                    <div class="signup-name-fields">
+                      <label for="profile-first-name">First name
+                        <input id="profile-first-name" name="firstName" type="text" autocomplete="given-name" maxlength="100" required>
+                      </label>
+                      <label for="profile-last-name">Last name
+                        <input id="profile-last-name" name="lastName" type="text" autocomplete="family-name" maxlength="100" required>
+                      </label>
+                    </div>
+                    <label for="profile-phone">Phone (optional)</label>
+                    <input id="profile-phone" name="phone" type="tel" autocomplete="tel" maxlength="30">
+                    <label for="profile-card-name">Card name</label>
+                    <input id="profile-card-name" name="cardName" type="text" maxlength="201" data-name-input>
+
+                    <fieldset class="signup-address">
+                      <legend>Mailing address</legend>
+                      <label for="profile-address-line1">Street address</label>
+                      <input id="profile-address-line1" name="addressLine1" type="text" autocomplete="address-line1" maxlength="200">
+                      <label for="profile-address-line2">Apartment, suite, or unit (optional)</label>
+                      <input id="profile-address-line2" name="addressLine2" type="text" autocomplete="address-line2" maxlength="200">
+                      <label for="profile-city">City</label>
+                      <input id="profile-city" name="city" type="text" autocomplete="address-level2" maxlength="100">
+                      <div class="signup-name-fields">
+                        <label for="profile-state">State / province
+                          <input id="profile-state" name="state" type="text" autocomplete="address-level1" maxlength="100">
+                        </label>
+                        <label for="profile-postal-code">ZIP / postal code
+                          <input id="profile-postal-code" name="postalCode" type="text" autocomplete="postal-code" maxlength="20">
+                        </label>
+                      </div>
+                      <label for="profile-country">Country</label>
+                      <input id="profile-country" name="country" type="text" autocomplete="country-name" maxlength="100">
+                    </fieldset>
+                    <div class="profile-form-actions">
+                      <button class="secondary-action" type="button" data-cancel-profile>Cancel</button>
+                      <button class="primary-action" type="submit"><i data-lucide="save" aria-hidden="true"></i>Save Changes</button>
+                    </div>
+                  </form>
+                </details>
+                <p class="fine-print profile-status" data-profile-status role="status" hidden></p>
+
+                <details class="profile-details" data-email-details>
+                  <summary><span>Email address<small data-current-email></small></span><i data-lucide="chevron-down" aria-hidden="true"></i></summary>
+                  <form class="profile-form" data-email-change-form>
+                    <label for="profile-new-email">New email</label>
+                    <input id="profile-new-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" maxlength="254" required>
+                    <button class="primary-action full-width" type="submit"><i data-lucide="mail-check" aria-hidden="true"></i>Send Verification Codes</button>
+                  </form>
+                  <form class="profile-form" data-email-verify-form hidden>
+                    <label for="profile-current-email-code">Code from current email</label>
+                    <input id="profile-current-email-code" name="currentCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required>
+                    <label for="profile-email-code">Code from new email</label>
+                    <input id="profile-email-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required>
+                    <button class="primary-action full-width" type="submit"><i data-lucide="mail-check" aria-hidden="true"></i>Confirm New Email</button>
+                    <button class="secondary-action full-width" type="button" data-resend-email-change><i data-lucide="refresh-cw" aria-hidden="true"></i>Resend Codes</button>
+                  </form>
+                  <button class="secondary-action full-width" type="button" data-cancel-email-change>Cancel Email Change</button>
+                </details>
+                <p class="fine-print profile-status" data-email-change-status role="status" hidden></p>
+
                 <div class="settings-list">
-                  <label class="setting-row input-row">
-                    <span>
-                      <strong>Card name</strong>
-                      <small>Shown on the VIP card</small>
-                    </span>
-                    <input type="text" value="Avery Mitchell" data-name-input aria-label="Card name">
-                  </label>
                   <div class="setting-row appearance-row">
                     <span>
                       <strong>Appearance</strong>
@@ -438,11 +493,6 @@
                 </div>
               </section>
 
-              <button class="secondary-action full-width" type="button" data-save-profile>
-                <i data-lucide="settings" aria-hidden="true"></i>
-                <span class="fallback-icon" aria-hidden="true">E</span>
-                Save Profile
-              </button>
               <p class="app-version" data-app-version>Version details unavailable</p>
             </section>
 

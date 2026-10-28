@@ -20,7 +20,23 @@ function element() {
   };
 }
 
-function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false } = {}) {
+function formElement(names) {
+  const form = element();
+  form.values = Object.fromEntries(names.map((name) => [name, ""]));
+  const inputs = Object.fromEntries(names.map((name) => {
+    const input = element();
+    Object.defineProperty(input, "value", { get: () => form.values[name] || "", set: (value) => { form.values[name] = value; } });
+    return [name, input];
+  }));
+  form.elements = { namedItem: (name) => inputs[name] || null };
+  form.controls = Object.values(inputs).concat(element());
+  form.querySelectorAll = () => form.controls;
+  form.querySelector = () => form.controls[0];
+  form.reset = () => { for (const name of names) form.values[name] = ""; };
+  return form;
+}
+
+function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false, profile = false } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
     "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
@@ -32,15 +48,21 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
       "[data-claim-message]", "[data-signup-message]", "[data-code-message]"]) elements[key] = element();
     for (const [key, names] of [["[data-claim-form]", ["identity", "lastName"]],
       ["[data-signup-form]", ["firstName", "lastName", "email", "phone", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]], ["[data-code-form]", ["code"]]]) {
-      const form = element();
-      form.values = Object.fromEntries(names.map((name) => [name, ""]));
-      form.controls = names.map(() => element()).concat(element());
-      form.querySelectorAll = () => form.controls;
-      form.querySelector = () => form.controls[0];
-      form.reset = () => { for (const name of names) form.values[name] = ""; };
+      const form = formElement(names);
       form.hidden = key !== "[data-claim-form]";
       elements[key] = form;
     }
+  }
+  if (profile) {
+    for (const key of ["[data-profile-details]", "[data-profile-status]", "[data-email-details]", "[data-email-change-status]",
+      "[data-current-email]", "[data-cancel-profile]", "[data-cancel-email-change]", "[data-resend-email-change]", ".member-summary h2"]) elements[key] = element();
+    elements["[data-profile-form]"] = formElement(["firstName", "lastName", "phone", "cardName", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]);
+    elements["[data-profile-form]"].controls.push(elements["[data-cancel-profile]"]);
+    elements["[data-name-input]"] = elements["[data-profile-form]"].elements.namedItem("cardName");
+    elements["[data-email-change-form]"] = formElement(["email"]);
+    elements["[data-email-verify-form]"] = formElement(["currentCode", "code"]);
+    elements["[data-email-verify-form]"].controls.push(elements["[data-resend-email-change]"]);
+    elements["[data-email-verify-form]"].hidden = true;
   }
   if (cardNameWidth !== null) {
     const name = element();
@@ -101,6 +123,8 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
       documentElement: { dataset: {}, classList: element().classList },
       querySelector: (selector) => elements[selector] || null,
       querySelectorAll: (selector) => ({ "[data-concierge-form]": [form], "[data-view-target]": nav, ".view": views,
+        ".member-summary h2": profile ? [elements[".member-summary h2"]] : [],
+        "[data-request-phone]": profile ? [fields["[data-request-phone]"]] : [],
         "[data-unread-count]": [elements["[data-unread-count]"]] })[selector] || [],
       addEventListener() {},
     },
@@ -124,6 +148,164 @@ function success(path) {
 }
 
 const submitAuth = (form) => form.listeners.submit({ currentTarget: form, preventDefault() {} });
+const profileMember = { ...member, firstName: "Avery", lastName: "Mitchell", cardName: member.name, phone: "4075550188",
+  addressLine1: "123 Example Street", addressLine2: "Apt 4B", city: "Orlando", state: "FL", postalCode: "32801", country: "United States" };
+
+test("personal details populate, save only editable fields, and refresh the card, name, and help phone", async (t) => {
+  const calls = [];
+  const updated = { ...profileMember, firstName: "Taylor", name: "Taylor Mitchell", cardName: "Taylor Mitchell", phone: "4075550123" };
+  const c = client(t, async (path, options) => {
+    if (path === "/api/profile") {
+      calls.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ member: updated }));
+    }
+    return success(path);
+  }, { profile: true });
+  c.context.member = profileMember;
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  const form = c.elements["[data-profile-form]"];
+  assert.equal(form.values.firstName, "Avery");
+  assert.equal(form.values.addressLine2, "Apt 4B");
+  assert.equal(c.elements["[data-current-email]"].textContent, member.email);
+  assert.equal(c.fields["[data-request-phone]"].value, profileMember.phone);
+  form.values.firstName = "Taylor";
+  form.values.phone = updated.phone;
+  form.listeners.input();
+  await submitAuth(form);
+  assert.equal(calls[0].firstName, "Taylor");
+  assert.equal(calls[0].addressLine1, profileMember.addressLine1);
+  assert.equal(calls[0].email, undefined);
+  assert.equal(calls[0].id, undefined);
+  assert.equal(c.run("activeMember.name"), updated.name);
+  assert.equal(form.values.cardName, updated.cardName);
+  assert.equal(c.run("profileDirty"), false);
+  assert.equal(c.elements["[data-profile-details]"].open, false);
+  assert.equal(c.fields["[data-request-phone]"].value, updated.phone);
+  assert.match(c.elements["[data-profile-status]"].textContent, /saved/);
+});
+
+test("failed profile saves preserve drafts, while Cancel restores the persisted details", async (t) => {
+  const c = client(t, async (path) => path === "/api/profile" ? new Response(JSON.stringify({ message: "Phone already in use." }), { status: 409 }) : success(path), { profile: true });
+  c.context.member = { ...profileMember, cardName: "Captain Moe" };
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  const form = c.elements["[data-profile-form]"];
+  form.values.firstName = "Unsaved";
+  form.values.cardName = "Draft Card Name";
+  form.listeners.input();
+  await submitAuth(form);
+  assert.equal(c.run("activeMember.firstName"), "Avery");
+  assert.equal(form.values.firstName, "Unsaved");
+  assert.match(c.elements["[data-profile-status]"].textContent, /already in use/);
+  assert.equal(c.run("accountBusy"), false);
+  c.elements["[data-cancel-profile]"].listeners.click();
+  assert.equal(form.values.firstName, "Avery");
+  assert.equal(form.values.cardName, "Captain Moe");
+  assert.equal(c.elements[".member-summary h2"].textContent, profileMember.name);
+  assert.equal(c.run("profileDirty"), false);
+});
+
+test("email changes wait for verification, support resends, rotate the token, and preserve unsaved personal edits", async (t) => {
+  const calls = [];
+  let sends = 0;
+  let wrongCode = true;
+  const c = client(t, async (path, options) => {
+    if (path.startsWith("/api/profile/email")) calls.push({ path, body: JSON.parse(options.body) });
+    if (path.endsWith("/email/start")) return new Response(JSON.stringify({ changeToken: `change-${++sends}`, destination: "ne***@example.com" }));
+    if (path.endsWith("/email/verify")) return new Response(JSON.stringify(wrongCode ? { message: "That code did not match." } :
+      { member: { ...profileMember, email: "new@example.com" }, sessionToken: "rotated-session" }), { status: wrongCode ? 400 : 200 });
+    return success(path);
+  }, { profile: true });
+  c.context.member = profileMember;
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  const email = c.elements["[data-email-change-form]"];
+  const verify = c.elements["[data-email-verify-form]"];
+  email.values.email = "new@example.com";
+  await submitAuth(email);
+  assert.equal(c.run("activeMember.email"), profileMember.email);
+  assert.equal(email.hidden, true);
+  assert.equal(verify.hidden, false);
+  verify.values.code = "000000";
+  await submitAuth(verify);
+  assert.match(c.elements["[data-email-change-status]"].textContent, /did not match/);
+  await c.elements["[data-resend-email-change]"].listeners.click({ preventDefault() {} });
+  assert.equal(sends, 2);
+  const form = c.elements["[data-profile-form]"];
+  form.values.firstName = "Unsaved";
+  form.values.cardName = "Unsaved Card";
+  form.listeners.input();
+  wrongCode = false;
+  verify.values.currentCode = "246810";
+  verify.values.code = "246810";
+  await submitAuth(verify);
+  assert.equal(calls.at(-1).body.changeToken, "change-2");
+  assert.equal(calls.at(-1).body.currentCode, "246810");
+  assert.equal(c.run("activeMember.email"), "new@example.com");
+  assert.equal(c.storage.get("jcm-vip-session"), "rotated-session");
+  assert.equal(form.values.firstName, "Unsaved");
+  assert.equal(form.values.cardName, "Unsaved Card");
+  assert.equal(c.elements["[data-current-email]"].textContent, "new@example.com");
+  assert.equal(verify.hidden, true);
+  assert.equal(email.hidden, false);
+  assert.equal(c.run("pendingEmailChange"), null);
+});
+
+test("canceling an email change keeps the old email, and failed code sends cannot change it", async (t) => {
+  let fail = false;
+  const calls = [];
+  const c = client(t, async (path, options) => {
+    if (path.startsWith("/api/profile/email")) {
+      calls.push({ path, method: options.method, body: JSON.parse(options.body) });
+      if (fail) return new Response(JSON.stringify({ message: "Email could not be sent." }), { status: 502 });
+      return new Response(JSON.stringify({ changeToken: "pending", destination: "ne***@example.com", ok: true }));
+    }
+    return success(path);
+  }, { profile: true });
+  c.context.member = profileMember;
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  const email = c.elements["[data-email-change-form]"];
+  email.values.email = "new@example.com";
+  await submitAuth(email);
+  await c.elements["[data-cancel-email-change]"].listeners.click();
+  assert.equal(calls.at(-1).method, "DELETE");
+  assert.equal(calls.at(-1).body.changeToken, "pending");
+  assert.equal(c.run("activeMember.email"), profileMember.email);
+  assert.equal(c.run("pendingEmailChange"), null);
+  fail = true;
+  email.values.email = "new@example.com";
+  await submitAuth(email);
+  assert.equal(c.run("pendingEmailChange"), null);
+  assert.equal(c.elements["[data-email-verify-form]"].hidden, true);
+  assert.equal(c.run("activeMember.email"), profileMember.email);
+});
+
+test("late profile or email responses cannot resurrect a logged-out account and duplicate submits are ignored", async (t) => {
+  for (const emailChange of [false, true]) {
+    let release;
+    let calls = 0;
+    const c = client(t, async (path) => {
+      if (path === "/api/profile" || path.endsWith("/email/verify")) {
+        calls += 1;
+        await new Promise((resolve) => { release = resolve; });
+        return new Response(JSON.stringify({ member: { ...profileMember, email: "new@example.com" }, sessionToken: "must-not-save" }));
+      }
+      return success(path);
+    }, { profile: true });
+    c.context.member = profileMember;
+    c.run("betaApiReady = true; applyMember(member, { announce: false })");
+    if (emailChange) c.run('pendingEmailChange = "pending"');
+    const form = c.elements[emailChange ? "[data-email-verify-form]" : "[data-profile-form]"];
+    const pending = submitAuth(form);
+    await submitAuth(form);
+    assert.equal(calls, 1);
+    c.run("resetMemberAuth()");
+    release();
+    await pending;
+    assert.equal(c.run("activeMember"), null);
+    assert.equal(c.storage.get("jcm-vip-session"), undefined);
+    assert.equal(c.run("pendingEmailChange"), null);
+    assert.equal(c.run("accountBusy"), false);
+  }
+});
 
 test("existing members keep email and last-name sign-in; offline signup cannot proceed", async (t) => {
   const calls = [];

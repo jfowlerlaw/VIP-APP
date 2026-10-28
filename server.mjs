@@ -19,7 +19,10 @@ const memberSessions = new Map();
 const adminSessions = new Map();
 const pendingClaims = new Map();
 const signupSendLimits = new Map();
-let signupCreationQueue = Promise.resolve();
+const emailChangeSendLimits = new Map();
+const pendingEmailChanges = new Map();
+let memberWriteQueue = Promise.resolve();
+const mailingFieldNames = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"];
 const claimDurationMs = 1000 * 60 * 15;
 const signupConflictMessage = "That email or phone number is already connected to a VIP account. Sign in instead, or email vip@justcallmoe.com for help.";
 const maxBodyBytes = 1_000_000;
@@ -526,19 +529,137 @@ async function handleApi(req, res, url) {
     }
 
     const body = await readJsonBody(req);
-    const cardName = String(body.cardName || member.name).trim() || member.name;
-    const storedMember = await vipDb.updateMember(member.id, {
-      cardName,
-      preferences: {
-        ...member.preferences,
-        ...body.preferences,
-      },
-    });
-    if (!storedMember) {
-      sendJson(res, 404, { message: "Member record not found." });
+    try {
+      const result = await withMemberWrite(async () => {
+        const current = await vipDb.getMemberById(member.id);
+        if (!current) return { status: 404, message: "Member record not found." };
+        const patch = normalizeProfilePatch(current, body);
+        if (patch.error) return { status: 400, message: patch.error };
+        if (patch.phone && (await vipDb.listMembers()).some((other) => other.id !== member.id && digitsOnly(other.phone) === patch.phone)) {
+          return { status: 409, message: "That phone number is already connected to another VIP account." };
+        }
+        const updated = Object.keys(patch).length ? await vipDb.updateMember(member.id, patch) : current;
+        return updated ? { member: updated } : { status: 404, message: "Member record not found." };
+      });
+      sendJson(res, result.status || 200, result.status ? { message: result.message } : { member: publicMember(result.member) });
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      sendJson(res, 409, { message: "That phone number is already connected to another VIP account." });
+    }
+    return;
+  }
+
+  if (["POST /api/profile/email/start", "POST /api/profile/email/verify", "DELETE /api/profile/email"].includes(route)) {
+    const member = await requireMember(req);
+    if (!member || isPausedStatus(member.status)) {
+      sendJson(res, 401, { message: "Please sign in to update your email." });
       return;
     }
-    sendJson(res, 200, { member: publicMember(storedMember) });
+    const body = await readJsonBody(req);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      sendJson(res, 400, { message: "Enter your new email or verification code." });
+      return;
+    }
+    if (route === "POST /api/profile/email/start") {
+      const email = cleanMemberField(body.email).toLowerCase();
+      if (!validMemberEmail(email) || email === member.email.trim().toLowerCase()) {
+        sendJson(res, 400, { message: "Enter a valid new email address, different from your current one." });
+        return;
+      }
+      if ((await vipDb.listMembers()).some((other) => other.id !== member.id && other.email.trim().toLowerCase() === email)) {
+        sendJson(res, 409, { message: "That email is already connected to another VIP account." });
+        return;
+      }
+      if (pendingEmailChanges.get(member.id)?.verifying) {
+        sendJson(res, 409, { message: "Your email is being updated. Please wait." });
+        return;
+      }
+      const retryAfter = reserveVerificationEmail(emailChangeSendLimits, [[`member:${member.id}`, 3], [`email:${email}`, 3], ["all", 100]]);
+      if (retryAfter) {
+        res.setHeader("Retry-After", String(retryAfter));
+        sendJson(res, 429, { message: "Too many email-change code requests. Please wait 15 minutes before trying again." });
+        return;
+      }
+      for (const [id, pending] of pendingEmailChanges) {
+        if (pending.expiresAt < Date.now() && !pending.verifying) pendingEmailChanges.delete(id);
+      }
+      const pending = { token: token(), email, currentEmail: member.email, code: verificationCode(), expiresAt: Date.now() + claimDurationMs, attempts: 0 };
+      pending.currentCode = verificationCode();
+      while (!showDevCodes() && pending.currentCode === pending.code) pending.currentCode = verificationCode();
+      pendingEmailChanges.set(member.id, pending);
+      const currentEmailResult = await sendVerificationEmail({ member, code: pending.currentCode, purpose: "email-change-current", proposedEmail: email });
+      const emailResult = currentEmailResult.status === "sent" || showDevCodes()
+        ? await sendVerificationEmail({ member: { ...member, email }, code: pending.code, purpose: "email-change" })
+        : currentEmailResult;
+      if (pendingEmailChanges.get(member.id) !== pending) {
+        sendJson(res, 409, { message: "Another email-change request was started. Use the latest code." });
+        return;
+      }
+      if ((emailResult.status !== "sent" || currentEmailResult.status !== "sent") && !showDevCodes()) {
+        pendingEmailChanges.delete(member.id);
+        sendJson(res, 502, { message: "The verification email could not be sent. Your current email has not changed. Please try again later." });
+        return;
+      }
+      sendJson(res, 200, { changeToken: pending.token, destination: maskDestination({ email }, email), currentDestination: maskDestination(member, member.email),
+        devCode: showDevCodes() ? pending.code : undefined, devCurrentCode: showDevCodes() ? pending.currentCode : undefined });
+      return;
+    }
+    const pending = pendingEmailChanges.get(member.id);
+    if (route === "DELETE /api/profile/email") {
+      if (pending?.verifying) {
+        sendJson(res, 409, { message: "Your email is being updated. Please wait." });
+        return;
+      }
+      if (pending?.token === body.changeToken) pendingEmailChanges.delete(member.id);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (!pending || pending.token !== body.changeToken || pending.expiresAt < Date.now()) {
+      if (pending?.expiresAt < Date.now()) pendingEmailChanges.delete(member.id);
+      sendJson(res, 400, { message: "That code expired or is no longer valid. Request a new one." });
+      return;
+    }
+    if (pending.verifying) {
+      sendJson(res, 409, { message: "Your email is already being verified. Please wait." });
+      return;
+    }
+    const newCodeMatches = safeEqual(String(body.code || "").trim(), pending.code);
+    const currentCodeMatches = safeEqual(String(body.currentCode || "").trim(), pending.currentCode);
+    if (!newCodeMatches || !currentCodeMatches) {
+      pending.attempts += 1;
+      if (pending.attempts >= 6) pendingEmailChanges.delete(member.id);
+      sendJson(res, 400, { message: pending.attempts >= 6 ? "Too many incorrect codes. Request a new one." : "That code did not match." });
+      return;
+    }
+    pending.verifying = true;
+    try {
+      const result = await withMemberWrite(async () => {
+        const current = await vipDb.getMemberById(member.id);
+        if (!current || current.email !== pending.currentEmail || isPausedStatus(current.status)) {
+          return { status: 409, message: "Your account changed. Start a new email verification." };
+        }
+        if ((await vipDb.listMembers()).some((other) => other.id !== member.id && other.email.trim().toLowerCase() === pending.email)) {
+          return { status: 409, message: "That email is already connected to another VIP account." };
+        }
+        const updated = await vipDb.updateMember(member.id, { email: pending.email });
+        return updated ? { member: updated } : { status: 404, message: "Member record not found." };
+      });
+      pendingEmailChanges.delete(member.id);
+      if (result.status) {
+        sendJson(res, result.status, { message: result.message });
+        return;
+      }
+      await removeMemberSessions(member.id);
+      const sessionToken = await createMemberSession(req, res, member.id);
+      sendJson(res, 200, { member: publicMember(result.member), sessionToken });
+      void sendEmailChangeNotice(member, pending.email).catch(() => console.warn("Email-change notice could not be sent."));
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      pendingEmailChanges.delete(member.id);
+      sendJson(res, 409, { message: "That email is already connected to another VIP account." });
+    } finally {
+      pending.verifying = false;
+    }
     return;
   }
 
@@ -1607,7 +1728,7 @@ async function sendConciergeEmail({ member, request }) {
   return sendEmail(payload);
 }
 
-async function sendVerificationEmail({ member, code }) {
+async function sendVerificationEmail({ member, code, purpose = "signin", proposedEmail = "" }) {
   const memberEmail = member.email || "";
 
   if (!memberEmail.includes("@")) {
@@ -1620,7 +1741,9 @@ async function sendVerificationEmail({ member, code }) {
   const content = [
     `Hi ${member.firstName || member.name || "there"},`,
     "",
-    "Use this code to finish signing in to your Just Call Moe VIP portal:",
+    purpose === "email-change-current" ? `Use this code to approve changing your Moe VIP email address to ${proposedEmail}:`
+      : purpose === "email-change" ? "Use this code to confirm the new email address for your Moe VIP account:"
+        : "Use this code to finish signing in to your Just Call Moe VIP portal:",
     "",
     code,
     "",
@@ -1635,7 +1758,8 @@ async function sendVerificationEmail({ member, code }) {
     personalizations: [
       {
         to: [{ email: memberEmail, name: member.name }],
-        subject: "Your Just Call Moe VIP sign-in code",
+        subject: purpose === "email-change-current" ? "Approve your Moe VIP email change"
+          : purpose === "email-change" ? "Confirm your new Moe VIP email" : "Your Just Call Moe VIP sign-in code",
       },
     ],
     from: {
@@ -1649,6 +1773,14 @@ async function sendVerificationEmail({ member, code }) {
       },
     ],
   });
+}
+
+async function sendEmailChangeNotice(member, newEmail) {
+  const result = await sendEmail({
+    personalizations: [{ to: [{ email: member.email, name: member.name }], subject: "Your Moe VIP email address was changed" }],
+    content: [{ type: "text/plain", value: `Your Moe VIP account email was changed to ${newEmail}.\n\nIf you did not make this change, contact vip@justcallmoe.com immediately.\n\nJust Call Moe VIP Team` }],
+  });
+  if (result.status !== "sent" && !showDevCodes()) console.warn("Email-change notice could not be sent.");
 }
 
 async function sendEmail(payload) {
@@ -1974,16 +2106,24 @@ function normalizePushPlatform(platform) {
   return "ios";
 }
 
-function normalizeSignup(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body) ||
-      ["firstName", "lastName", "email", "phone", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]
-        .some((key) => body[key] !== undefined && typeof body[key] !== "string")) return null;
-  const field = (key) => typeof body[key] === "string" ? body[key].trim().replace(/\s+/g, " ") : "";
-  const firstName = field("firstName");
-  const lastName = field("lastName");
-  const email = field("email").toLowerCase();
-  const rawPhone = field("phone");
-  const phone = digitsOnly(rawPhone);
+function cleanMemberField(value) {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function validMemberEmail(email) {
+  return email.length <= 254 && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+}
+
+function normalizeMemberPhone(value = "") {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  const phone = digitsOnly(raw);
+  return raw && (!/^[+()\d\s.-]+$/.test(raw) || phone.length < 7 || phone.length > 15) ? null : phone;
+}
+
+function normalizeMailingAddress(body) {
+  if (mailingFieldNames.some((key) => body[key] !== undefined && typeof body[key] !== "string")) return null;
+  const field = (key) => cleanMemberField(body[key]);
   const addressLine1 = field("addressLine1");
   const addressLine2 = field("addressLine2");
   const city = field("city");
@@ -1993,13 +2133,70 @@ function normalizeSignup(body) {
   const state = isUnitedStates && rawState.length === 2 ? rawState.toUpperCase() : rawState;
   let postalCode = field("postalCode").toUpperCase();
   if (isUnitedStates && /^\d{9}$/.test(postalCode)) postalCode = `${postalCode.slice(0, 5)}-${postalCode.slice(5)}`;
-  if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100 ||
-      !addressLine1 || addressLine1.length > 200 || addressLine2.length > 200 ||
+  if (!addressLine1 || addressLine1.length > 200 || addressLine2.length > 200 ||
       !city || city.length > 100 || !state || state.length > 100 || !country || country.length > 100 ||
-      !postalCode || postalCode.length > 20 || (isUnitedStates && !/^\d{5}(?:-\d{4})?$/.test(postalCode)) ||
-      email.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) ||
-      (rawPhone && (!/^[+()\d\s.-]+$/.test(rawPhone) || phone.length < 7 || phone.length > 15))) return null;
-  return { firstName, lastName, email, phone, addressLine1, addressLine2, city, state, postalCode, country };
+      !postalCode || postalCode.length > 20 || (isUnitedStates && !/^\d{5}(?:-\d{4})?$/.test(postalCode))) return null;
+  return { addressLine1, addressLine2, city, state, postalCode, country };
+}
+
+function normalizeSignup(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body) ||
+      ["firstName", "lastName", "email"].some((key) => typeof body[key] !== "string")) return null;
+  const firstName = cleanMemberField(body.firstName);
+  const lastName = cleanMemberField(body.lastName);
+  const email = cleanMemberField(body.email).toLowerCase();
+  const phone = normalizeMemberPhone(body.phone);
+  const address = normalizeMailingAddress(body);
+  if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100 || !validMemberEmail(email) || phone === null || !address) return null;
+  return { firstName, lastName, email, phone, ...address };
+}
+
+function normalizeProfilePatch(member, body) {
+  const invalid = (error) => ({ error });
+  if (!body || typeof body !== "object" || Array.isArray(body)) return invalid("Enter valid profile details.");
+  const editable = ["firstName", "lastName", "phone", "cardName", "email", ...mailingFieldNames];
+  if (editable.some((key) => body[key] !== undefined && typeof body[key] !== "string")) return invalid("Enter valid text for your profile details.");
+  if ("email" in body && cleanMemberField(body.email).toLowerCase() !== member.email.trim().toLowerCase()) {
+    return invalid("Use Email address in Settings to verify a new email before changing it.");
+  }
+  const patch = {};
+  const previousName = displayNameFromParts(member);
+  let name = previousName;
+  if ("firstName" in body || "lastName" in body) {
+    const firstName = cleanMemberField(body.firstName ?? member.firstName ?? firstNameFromName(previousName));
+    const lastName = cleanMemberField(body.lastName ?? member.lastName ?? lastNameFromName(previousName));
+    if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100) return invalid("Enter a first and last name, each 100 characters or fewer.");
+    name = `${firstName} ${lastName}`;
+    Object.assign(patch, { firstName, lastName, name });
+  }
+  if ("phone" in body) {
+    const phone = normalizeMemberPhone(body.phone);
+    if (phone === null) return invalid("Use a phone number with 7 to 15 digits, or leave it blank.");
+    patch.phone = phone;
+  }
+  const followsName = !member.cardName || member.cardName === previousName || member.cardName === member.name;
+  if ("cardName" in body) {
+    const cardName = cleanMemberField(body.cardName) || name;
+    if (cardName.length > 201 && cardName !== member.cardName) return invalid("Use 201 characters or fewer for the card name.");
+    patch.cardName = followsName && name !== previousName && cardName === previousName ? name : cardName;
+  } else if (followsName && name !== previousName) patch.cardName = name;
+  const addressChanged = mailingFieldNames.some((key) => key in body && cleanMemberField(body[key]) !== cleanMemberField(member[key]));
+  if (addressChanged) {
+    const address = normalizeMailingAddress(Object.fromEntries(mailingFieldNames.map((key) => [key, body[key] ?? member[key] ?? ""])));
+    if (!address) return invalid("Enter a full mailing address: street, city, state/province, ZIP/postal code, and country.");
+    Object.assign(patch, address);
+  }
+  if ("preferences" in body) {
+    if (!body.preferences || typeof body.preferences !== "object" || Array.isArray(body.preferences)) return invalid("Enter valid preferences.");
+    const preferences = { ...member.preferences };
+    for (const key of ["smsAlerts", "emailUpdates", "walletUpdates"]) {
+      if (!(key in body.preferences)) continue;
+      if (typeof body.preferences[key] !== "boolean") return invalid("Enter valid preferences.");
+      preferences[key] = body.preferences[key];
+    }
+    patch.preferences = preferences;
+  }
+  return patch;
 }
 
 function signupConflicts(members, signup) {
@@ -2014,30 +2211,41 @@ function removeExpiredClaims() {
 }
 
 function reserveSignupEmail(email) {
+  return reserveVerificationEmail(signupSendLimits, [[email, 3], ["all", 100]]);
+}
+
+function reserveVerificationEmail(store, limits) {
   const now = Date.now();
-  for (const [key, limit] of signupSendLimits) {
-    if (limit.expiresAt <= now) signupSendLimits.delete(key);
+  for (const [key, limit] of store) {
+    if (limit.expiresAt <= now) store.delete(key);
   }
-  const limits = [[email, 3], ["all", 100]];
   for (const [key, maximum] of limits) {
-    const limit = signupSendLimits.get(key);
+    const limit = store.get(key);
     if (limit?.count >= maximum) return Math.ceil((limit.expiresAt - now) / 1000);
   }
   for (const [key] of limits) {
-    const limit = signupSendLimits.get(key) || { count: 0, expiresAt: now + claimDurationMs };
+    const limit = store.get(key) || { count: 0, expiresAt: now + claimDurationMs };
     limit.count += 1;
-    signupSendLimits.set(key, limit);
+    store.set(key, limit);
   }
   return 0;
 }
 
-async function registerVerifiedMember(signup) {
-  // Serialize local registrations; Supabase's unique indexes also protect across processes.
-  const previous = signupCreationQueue;
+async function withMemberWrite(write) {
+  // Keep local identity checks and writes together; Supabase also enforces unique contacts.
+  const previous = memberWriteQueue;
   let release;
-  signupCreationQueue = new Promise((resolve) => { release = resolve; });
+  memberWriteQueue = new Promise((resolve) => { release = resolve; });
   await previous;
   try {
+    return await write();
+  } finally {
+    release();
+  }
+}
+
+async function registerVerifiedMember(signup) {
+  return withMemberWrite(async () => {
     const members = await vipDb.listMembers();
     if (signupConflicts(members, signup)) return null;
     try {
@@ -2051,9 +2259,7 @@ async function registerVerifiedMember(signup) {
       if (error.status === 409) return null;
       throw error;
     }
-  } finally {
-    release();
-  }
+  });
 }
 
 function findMemberByEmail(members, email) {
@@ -2191,6 +2397,7 @@ async function forgetMemberSession(sessionToken) {
 }
 
 async function removeMemberSessions(memberId) {
+  pendingEmailChanges.delete(memberId);
   for (const [sessionToken, session] of memberSessions.entries()) {
     if (session.memberId === memberId) {
       memberSessions.delete(sessionToken);

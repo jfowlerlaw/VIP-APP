@@ -4,6 +4,15 @@ const views = document.querySelectorAll(".view");
 const toast = document.querySelector(".toast");
 const conciergeForms = document.querySelectorAll("[data-concierge-form]");
 const cardNameInput = document.querySelector("[data-name-input]");
+const profileForm = document.querySelector("[data-profile-form]");
+const profileDetails = document.querySelector("[data-profile-details]");
+const profileStatus = document.querySelector("[data-profile-status]");
+const emailChangeForm = document.querySelector("[data-email-change-form]");
+const emailVerifyForm = document.querySelector("[data-email-verify-form]");
+const emailDetails = document.querySelector("[data-email-details]");
+const emailChangeStatus = document.querySelector("[data-email-change-status]");
+const cancelEmailChange = document.querySelector("[data-cancel-email-change]");
+const profileFieldNames = ["firstName", "lastName", "phone", "cardName", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"];
 const etchedName = document.querySelector(".etched-name");
 const cardNameArea = document.querySelector(".card-name-area");
 const avatar = document.querySelector(".avatar");
@@ -72,6 +81,10 @@ let pendingClaim = null;
 let authMode = "signin";
 let authBusy = false;
 let activeMember = null;
+let profileDirty = false;
+let accountBusy = false;
+let accountEpoch = 0;
+let pendingEmailChange = null;
 let betaApiReady = false;
 let toastTimer;
 let pushListenersAttached = false;
@@ -709,8 +722,9 @@ function stackedCardName(name) {
 
 function updateMemberName(name) {
   const cleanName = name.trim() || "VIP Member";
+  const profileName = activeMember?.name || cleanName;
   document.querySelectorAll(".member-summary h2").forEach((item) => {
-    item.textContent = cleanName;
+    item.textContent = profileName;
   });
 
   if (etchedName) {
@@ -720,7 +734,7 @@ function updateMemberName(name) {
   }
 
   if (avatar) {
-    avatar.textContent = cleanName
+    avatar.textContent = profileName
       .split(/\s+/)
       .slice(0, 2)
       .map((part) => part[0])
@@ -758,16 +772,19 @@ function findDemoMember(identity, lastName) {
 }
 
 function applyMember(member, options = {}) {
+  const previousPhone = activeMember?.phone;
+  const keepDraft = options.preserveProfileDraft && profileDirty;
   activeMember = member;
   const displayName = member.cardName || member.name;
-  updateMemberName(displayName);
+  updateMemberName(keepDraft && cardNameInput ? cardNameInput.value : displayName);
 
-  if (cardNameInput) {
-    cardNameInput.value = displayName;
+  if (!keepDraft) {
+    if (cardNameInput) cardNameInput.value = displayName;
+    fillProfileForm(member);
   }
 
   document.querySelectorAll("[data-request-phone]").forEach((input) => {
-    if (!input.value.trim()) {
+    if (!input.value.trim() || input.value === previousPhone) {
       input.value = member.phone || "";
     }
   });
@@ -779,6 +796,8 @@ function applyMember(member, options = {}) {
   document.querySelectorAll("[data-member-contact]").forEach((item) => {
     item.textContent = member.email || member.phone || "VIP member";
   });
+  const currentEmail = document.querySelector("[data-current-email]");
+  if (currentEmail) currentEmail.textContent = member.email || "";
 
   appScreen?.classList.add("is-authenticated");
   document.querySelector("[data-auth-screen]")?.setAttribute("hidden", "");
@@ -794,6 +813,13 @@ function applyMember(member, options = {}) {
 }
 
 function resetMemberAuth() {
+  accountEpoch += 1;
+  setAccountBusy(false);
+  profileForm?.reset();
+  profileDirty = false;
+  if (profileDetails) profileDetails.open = false;
+  setAccountStatus(profileStatus, "");
+  resetEmailChange();
   activeMember = null;
   pendingMember = null;
   pendingClaim = null;
@@ -1659,31 +1685,183 @@ if (cardNameInput) {
   });
 }
 
-document.querySelectorAll("[data-save-profile]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (cardNameInput) {
-      updateMemberName(cardNameInput.value);
-    }
+function fillProfileForm(member = activeMember) {
+  if (!profileForm || !member) return;
+  for (const name of profileFieldNames) {
+    const input = profileForm.elements.namedItem(name);
+    if (!input) continue;
+    input.value = name === "cardName" ? member.cardName || member.name : member[name] || "";
+  }
+  profileDirty = false;
+}
 
-    if (betaApiReady && activeMember && cardNameInput) {
-      try {
-        const result = await apiRequest("/api/profile", {
-          method: "POST",
-          body: JSON.stringify({ cardName: cardNameInput.value }),
-        });
-        applyMember(result.member);
-      } catch (error) {
-        showToast(error.message || "Profile could not be saved.");
-        return;
+function setAccountStatus(element, message) {
+  if (!element) return;
+  element.textContent = message;
+  element.hidden = !message;
+}
+
+function setAccountBusy(busy) {
+  accountBusy = busy;
+  for (const form of [profileForm, emailChangeForm, emailVerifyForm]) {
+    form?.setAttribute("aria-busy", String(busy));
+    form?.querySelectorAll("input, button").forEach((control) => { control.disabled = busy; });
+  }
+  if (cancelEmailChange) cancelEmailChange.disabled = busy;
+  memberLogoutButtons.forEach((button) => { button.disabled = busy; });
+}
+
+function resetEmailChange() {
+  pendingEmailChange = null;
+  emailChangeForm?.reset();
+  emailVerifyForm?.reset();
+  if (emailChangeForm) emailChangeForm.hidden = false;
+  if (emailVerifyForm) emailVerifyForm.hidden = true;
+  if (emailDetails) emailDetails.open = false;
+  setAccountStatus(emailChangeStatus, "");
+}
+
+function accountRequestCurrent(epoch, memberId) {
+  return epoch === accountEpoch && activeMember?.id === memberId;
+}
+
+function accountRequestError(element, error) {
+  if (error.status === 401) {
+    resetMemberAuth();
+    showToast("Please sign in again to update your account.");
+  } else setAccountStatus(element, error.message || "Your changes could not be saved. Please try again.");
+}
+
+profileForm?.addEventListener("input", () => {
+  profileDirty = true;
+  setAccountStatus(profileStatus, "");
+});
+profileForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (accountBusy) return;
+  if (!betaApiReady || !activeMember) {
+    setAccountStatus(profileStatus, "Please sign in to update your profile.");
+    return;
+  }
+  const epoch = accountEpoch;
+  const memberId = activeMember.id;
+  const data = new FormData(profileForm);
+  const body = Object.fromEntries(profileFieldNames.map((name) => [name, String(data.get(name) || "")]));
+  setAccountBusy(true);
+  setAccountStatus(profileStatus, "Saving changes...");
+  try {
+    const result = await apiRequest("/api/profile", { method: "POST", body: JSON.stringify(body) });
+    if (!accountRequestCurrent(epoch, memberId)) return;
+    applyMember(result.member, { announce: false });
+    if (profileDetails) profileDetails.open = false;
+    setAccountStatus(profileStatus, "Changes saved.");
+    showToast("Profile updated.");
+  } catch (error) {
+    if (accountRequestCurrent(epoch, memberId)) accountRequestError(profileStatus, error);
+  } finally {
+    if (epoch === accountEpoch) setAccountBusy(false);
+  }
+});
+
+document.querySelector("[data-cancel-profile]")?.addEventListener("click", () => {
+  if (accountBusy || !activeMember) return;
+  fillProfileForm();
+  updateMemberName(activeMember.cardName || activeMember.name);
+  if (profileDetails) profileDetails.open = false;
+  setAccountStatus(profileStatus, "");
+});
+
+async function requestEmailChangeCode(event) {
+  event.preventDefault();
+  if (accountBusy) return;
+  if (!betaApiReady || !activeMember || !emailChangeForm) {
+    setAccountStatus(emailChangeStatus, "Please sign in to update your email.");
+    return;
+  }
+  const epoch = accountEpoch;
+  const memberId = activeMember.id;
+  const email = String(new FormData(emailChangeForm).get("email") || "");
+  setAccountBusy(true);
+  setAccountStatus(emailChangeStatus, "Sending confirmation codes to both email addresses...");
+  try {
+    const result = await apiRequest("/api/profile/email/start", { method: "POST", body: JSON.stringify({ email }) });
+    if (!accountRequestCurrent(epoch, memberId)) return;
+    if (!result.changeToken) throw new Error("The verification email could not be sent. Your current email has not changed.");
+    pendingEmailChange = result.changeToken;
+    emailChangeForm.hidden = true;
+    if (emailVerifyForm) {
+      emailVerifyForm.reset();
+      emailVerifyForm.hidden = false;
+    }
+    setAccountStatus(emailChangeStatus, `Codes sent to ${result.currentDestination || activeMember.email} and ${result.destination}. Your email will change after both codes are confirmed. Codes expire in 15 minutes.${result.devCode ? ` Test codes: current ${result.devCurrentCode}, new ${result.devCode}.` : ""}`);
+  } catch (error) {
+    if (accountRequestCurrent(epoch, memberId)) {
+      if (error.status === 502) {
+        pendingEmailChange = null;
+        emailChangeForm.hidden = false;
+        if (emailVerifyForm) emailVerifyForm.hidden = true;
       }
+      accountRequestError(emailChangeStatus, error);
     }
+  } finally {
+    if (epoch === accountEpoch) setAccountBusy(false);
+  }
+  if (accountRequestCurrent(epoch, memberId) && pendingEmailChange) emailVerifyForm?.querySelector("input")?.focus();
+}
 
-    showToast("Profile saved.");
-  });
+emailChangeForm?.addEventListener("submit", requestEmailChangeCode);
+emailChangeForm?.addEventListener("input", () => { setAccountStatus(emailChangeStatus, ""); });
+document.querySelector("[data-resend-email-change]")?.addEventListener("click", requestEmailChangeCode);
+
+emailVerifyForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (accountBusy || !pendingEmailChange || !activeMember) return;
+  const epoch = accountEpoch;
+  const memberId = activeMember.id;
+  const data = new FormData(emailVerifyForm);
+  const code = String(data.get("code") || "").trim();
+  const currentCode = String(data.get("currentCode") || "").trim();
+  setAccountBusy(true);
+  setAccountStatus(emailChangeStatus, "Confirming your new email...");
+  try {
+    const result = await apiRequest("/api/profile/email/verify", {
+      method: "POST", body: JSON.stringify({ changeToken: pendingEmailChange, code, currentCode }),
+    });
+    if (!accountRequestCurrent(epoch, memberId)) return;
+    storeMemberSession(result.sessionToken);
+    applyMember(result.member, { announce: false, preserveProfileDraft: true });
+    resetEmailChange();
+    setAccountStatus(emailChangeStatus, "Email address updated.");
+    showToast("Email address updated.");
+  } catch (error) {
+    if (accountRequestCurrent(epoch, memberId)) accountRequestError(emailChangeStatus, error);
+  } finally {
+    if (epoch === accountEpoch) setAccountBusy(false);
+  }
+});
+
+cancelEmailChange?.addEventListener("click", async () => {
+  if (accountBusy) return;
+  if (!pendingEmailChange || !activeMember) {
+    resetEmailChange();
+    return;
+  }
+  const epoch = accountEpoch;
+  const memberId = activeMember.id;
+  setAccountBusy(true);
+  try {
+    await apiRequest("/api/profile/email", { method: "DELETE", body: JSON.stringify({ changeToken: pendingEmailChange }) });
+    if (accountRequestCurrent(epoch, memberId)) resetEmailChange();
+  } catch (error) {
+    if (accountRequestCurrent(epoch, memberId)) accountRequestError(emailChangeStatus, error);
+  } finally {
+    if (epoch === accountEpoch) setAccountBusy(false);
+  }
 });
 
 memberLogoutButtons.forEach((button) => {
   button.addEventListener("click", async () => {
+    if (accountBusy) return;
     button.setAttribute("disabled", "");
 
     try {

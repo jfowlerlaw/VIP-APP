@@ -409,13 +409,15 @@ img {
   display: none;
 }
 
-.claim-form label {
+.claim-form label,
+.profile-form label {
   color: var(--soft-ink);
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.claim-form input {
+.claim-form input,
+.profile-form input {
   width: 100%;
   height: 44px;
   padding: 0 10px;
@@ -1406,6 +1408,87 @@ p {
 .profile-settings h2 {
   margin-bottom: 10px;
   font-size: 1.16rem;
+}
+
+.profile-details {
+  border-top: 1px solid var(--line);
+}
+
+.profile-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 0;
+  list-style: none;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.profile-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.profile-details summary span {
+  min-width: 0;
+}
+
+.profile-details summary small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.profile-details summary svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.profile-details[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.profile-form {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 16px;
+}
+
+.profile-form[hidden],
+.profile-status[hidden] {
+  display: none;
+}
+
+.profile-form-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.profile-form-actions button,
+.profile-form > button {
+  padding: 0 10px;
+  font-size: 0.85rem;
+}
+
+.profile-details > [data-cancel-email-change] {
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+}
+
+.member-summary > div,
+.member-summary h2,
+.member-summary [data-member-contact] {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .setting-row {
