@@ -19,9 +19,12 @@ const notificationDeleteDialog = document.querySelector("[data-notification-dele
 const confirmNotificationDelete = document.querySelector("[data-confirm-notification-delete]");
 const cancelNotificationDelete = document.querySelector("[data-cancel-notification-delete]");
 const claimForm = document.querySelector("[data-claim-form]");
+const signupForm = document.querySelector("[data-signup-form]");
 const codeForm = document.querySelector("[data-code-form]");
 const claimMessage = document.querySelector("[data-claim-message]");
+const signupMessage = document.querySelector("[data-signup-message]");
 const codeMessage = document.querySelector("[data-code-message]");
+const authToggle = document.querySelector("[data-auth-toggle]");
 const memberLogoutButtons = document.querySelectorAll("[data-member-logout]");
 const eventsList = document.querySelector("[data-events-list]");
 const perksList = document.querySelector("[data-perks-list]");
@@ -66,6 +69,8 @@ const demoMembers = [
 ];
 let pendingMember = null;
 let pendingClaim = null;
+let authMode = "signin";
+let authBusy = false;
 let activeMember = null;
 let betaApiReady = false;
 let toastTimer;
@@ -807,9 +812,12 @@ function resetMemberAuth() {
   appScreen?.classList.remove("is-authenticated");
   document.querySelector("[data-auth-screen]")?.removeAttribute("hidden");
   if (claimForm) claimForm.hidden = false;
+  if (signupForm) signupForm.hidden = true;
   if (codeForm) codeForm.hidden = true;
   claimForm?.reset();
+  signupForm?.reset();
   codeForm?.reset();
+  setAuthMode("signin");
   conciergeForms.forEach((form) => {
     form.reset();
     const feedbackDetails = form.querySelector("[data-feedback-details]");
@@ -1398,93 +1406,108 @@ document.querySelectorAll(".sheet").forEach((sheet) => {
   });
 });
 
-claimForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const data = new FormData(form);
-  const identity = String(data.get("identity") || "");
-  const lastName = String(data.get("lastName") || "");
-
-  if (betaApiReady) {
-    try {
-      const result = await apiRequest("/api/claim/start", {
-        method: "POST",
-        body: JSON.stringify({ identity, lastName }),
-      });
-      const emailStatus = result.email?.status;
-      const canEnterCode = Boolean(result.devCode || emailStatus === "sent");
-
-      if (!canEnterCode) {
-        pendingClaim = null;
-        pendingMember = null;
-        if (claimMessage) {
-          claimMessage.textContent =
-            "We found your VIP record, but the verification email could not be sent. Please email vip@justcallmoe.com for help.";
-        }
-        return;
-      }
-
-      pendingClaim = result.claimToken;
-      pendingMember = null;
-      form.hidden = true;
-      if (codeForm) {
-        codeForm.hidden = false;
-        codeForm.querySelector("input")?.focus();
-      }
-      if (codeMessage) {
-        codeMessage.textContent = `Code sent to ${result.destination}.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`;
-      }
-      return;
-    } catch (error) {
-      pendingClaim = null;
-      pendingMember = null;
-      if (claimMessage) {
-        claimMessage.textContent =
-          error.status >= 500
-            ? "Member records are temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com."
-            : error.message || "If this matches a VIP record, we will send a code.";
-      }
-      return;
-    }
+function setAuthBusy(busy) {
+  authBusy = busy;
+  for (const form of [claimForm, signupForm, codeForm]) {
+    form?.setAttribute("aria-busy", String(busy));
+    form?.querySelectorAll("input, button").forEach((control) => { control.disabled = busy; });
   }
+  if (authToggle) authToggle.disabled = busy;
+}
 
-  if (!betaApiReady) {
-    pendingMember = null;
-    if (claimMessage) {
-      claimMessage.textContent =
-        "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
-    }
-    return;
-  }
-
-  const member = findDemoMember(identity, lastName);
-
-  if (!member) {
-    pendingMember = null;
-    if (claimMessage) {
-      claimMessage.textContent = "If this matches a VIP record, we will send a verification code.";
-    }
-    return;
-  }
-
-  pendingMember = member;
+function setAuthMode(mode) {
+  if (authBusy) return;
+  authMode = mode === "signup" ? "signup" : "signin";
+  const signingUp = authMode === "signup";
+  pendingMember = null;
   pendingClaim = null;
-  form.hidden = true;
+  if (claimForm) claimForm.hidden = signingUp;
+  if (signupForm) signupForm.hidden = !signingUp;
+  const authScreen = document.querySelector("[data-auth-screen]");
+  if (authScreen) {
+    authScreen.scrollTop = 0;
+    authScreen.setAttribute("aria-label", signingUp ? "Join Moe VIP" : "Claim your VIP card");
+  }
   if (codeForm) {
-    codeForm.hidden = false;
-    codeForm.querySelector("input")?.focus();
+    codeForm.hidden = true;
+    codeForm.reset();
   }
-  if (codeMessage) {
-    codeMessage.textContent = `Code sent to ${maskDestination(member, identity)}. Test code: ${demoCode}.`;
+  const copy = {
+    "[data-auth-title]": signingUp ? "Join Moe VIP" : "Claim Your VIP Card",
+    "[data-auth-description]": signingUp
+      ? "Create your free account for instant access to your VIP card, perks, and events."
+      : "Enter the email connected to your VIP membership. If it matches a record, we will send a verification code.",
+    "[data-auth-switch-prompt]": signingUp ? "Already a VIP?" : "Not a VIP yet?",
+    "[data-auth-toggle]": signingUp ? "Sign in" : "Sign up",
+    "[data-verify-label]": signingUp ? "Create My VIP Account" : "Open VIP Portal",
+    "[data-change-identity-label]": signingUp ? "Edit Sign-Up Details" : "Use Different Email",
+  };
+  for (const [selector, text] of Object.entries(copy)) {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = text;
   }
+  const authSwitch = document.querySelector("[data-auth-switch]");
+  if (authSwitch) authSwitch.hidden = false;
+  if (claimMessage) claimMessage.textContent = "Use the email address connected to your VIP membership.";
+  if (signupMessage) signupMessage.textContent = "Verify your email to activate your free VIP account.";
+  if (codeMessage) codeMessage.textContent = "";
+}
+
+authToggle?.addEventListener("click", () => {
+  setAuthMode(authMode === "signup" ? "signin" : "signup");
 });
+
+async function requestAuthCode(event) {
+  event.preventDefault();
+  if (authBusy) return;
+  const form = event.currentTarget;
+  const signingUp = form === signupForm;
+  const message = signingUp ? signupMessage : claimMessage;
+  const data = new FormData(form);
+  pendingClaim = null;
+  pendingMember = null;
+  if (!betaApiReady) {
+    if (message) message.textContent = "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
+    return;
+  }
+  const fields = signingUp ? ["firstName", "lastName", "email", "phone", "city"] : ["identity", "lastName"];
+  const body = Object.fromEntries(fields.map((field) => [field, String(data.get(field) || "")]));
+  setAuthBusy(true);
+  if (message) message.textContent = "Sending your verification code...";
+  try {
+    const result = await apiRequest(signingUp ? "/api/signup/start" : "/api/claim/start", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!result.claimToken || !(result.devCode || result.email?.status === "sent")) {
+      if (message) message.textContent = "The verification email could not be sent. Please email vip@justcallmoe.com for help.";
+      return;
+    }
+    pendingClaim = result.claimToken;
+    form.hidden = true;
+    if (codeForm) codeForm.hidden = false;
+    const authSwitch = document.querySelector("[data-auth-switch]");
+    if (authSwitch) authSwitch.hidden = true;
+    if (codeMessage) codeMessage.textContent = `Code sent to ${result.destination}. It expires in 15 minutes.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`;
+  } catch (error) {
+    if (message) message.textContent = error.message || "We couldn't send your code. Please try again.";
+  } finally {
+    setAuthBusy(false);
+  }
+  if (pendingClaim) codeForm?.querySelector("input")?.focus();
+}
+
+claimForm?.addEventListener("submit", requestAuthCode);
+signupForm?.addEventListener("submit", requestAuthCode);
 
 codeForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (authBusy) return;
   const form = event.currentTarget;
   const code = String(new FormData(form).get("code") || "").trim();
 
   if (pendingClaim) {
+    setAuthBusy(true);
     try {
       const result = await apiRequest("/api/claim/verify", {
         method: "POST",
@@ -1492,13 +1515,16 @@ codeForm?.addEventListener("submit", async (event) => {
       });
       pendingClaim = null;
       storeMemberSession(result.sessionToken);
-      applyMember(result.member);
+      applyMember(result.member, { announce: !result.createdAccount });
+      if (result.createdAccount) showToast(`Welcome to Moe VIP, ${firstNameForGreeting(result.member)}!`);
       return;
     } catch (error) {
       if (codeMessage) {
         codeMessage.textContent = error.message || "That code did not match.";
       }
       return;
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -1513,19 +1539,7 @@ codeForm?.addEventListener("submit", async (event) => {
 });
 
 document.querySelector("[data-change-identity]")?.addEventListener("click", () => {
-  pendingMember = null;
-  pendingClaim = null;
-  if (claimForm) {
-    claimForm.hidden = false;
-    claimForm.reset();
-  }
-  if (codeForm) {
-    codeForm.hidden = true;
-    codeForm.reset();
-  }
-  if (claimMessage) {
-    claimMessage.textContent = "Use the email address connected to your VIP membership.";
-  }
+  setAuthMode(authMode);
 });
 
 document.querySelectorAll("[data-toggle-alert]").forEach((button) => {

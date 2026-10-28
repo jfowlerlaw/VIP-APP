@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 
-export async function startTestServer() {
+export async function startTestServer({ showCodes = true } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "vip-features-"));
   for (const file of ["server.mjs", "database.mjs", "event-calendar.mjs", "index.html", "styles.css", "app.js", "admin.html", "admin.css", "admin.js", "assets"]) {
     await cp(new URL(`../${file}`, import.meta.url), join(directory, file), { recursive: true });
@@ -14,7 +14,7 @@ export async function startTestServer() {
     env: { ...process.env, PORT: "0", HOST: "127.0.0.1", NODE_ENV: "test",
       SUPABASE_URL: "", SUPABASE_SECRET_KEY: "", SUPABASE_SERVICE_KEY: "", SUPABASE_SERVICE_ROLE_KEY: "",
       SENDGRID_API_KEY: "", APNS_PRIVATE_KEY: "", APNS_PRIVATE_KEY_PATH: "", APNS_TEAM_ID: "", APNS_KEY_ID: "",
-      VIP_ADMIN_PASSWORD: "local-feature-test", VIP_SHOW_CODES: "true", VIP_DEV_CODE: "246810" },
+      VIP_ADMIN_PASSWORD: "local-feature-test", VIP_SHOW_CODES: String(showCodes), VIP_DEV_CODE: "246810" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let logs = "";

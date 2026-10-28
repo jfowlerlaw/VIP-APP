@@ -425,6 +425,42 @@ img {
   background: var(--field);
 }
 
+.signup-name-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.signup-name-fields label {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.auth-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 8px;
+  font-size: 0.88rem;
+}
+
+.auth-switch[hidden] {
+  display: none;
+}
+
+.auth-switch button {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  color: var(--red);
+  background: transparent;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .claim-help {
   display: inline-flex;
   justify-content: center;

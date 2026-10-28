@@ -18,6 +18,10 @@ const host = process.env.HOST || "127.0.0.1";
 const memberSessions = new Map();
 const adminSessions = new Map();
 const pendingClaims = new Map();
+const signupSendLimits = new Map();
+let signupCreationQueue = Promise.resolve();
+const claimDurationMs = 1000 * 60 * 15;
+const signupConflictMessage = "That email or phone number is already connected to a VIP account. Sign in instead, or email vip@justcallmoe.com for help.";
 const maxBodyBytes = 1_000_000;
 const conciergeEmail = process.env.VIP_REQUEST_EMAIL || "vip@justcallmoe.com";
 const memberSessionDurationMs = 1000 * 60 * 60 * 24 * 90;
@@ -356,12 +360,13 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    removeExpiredClaims();
     const claimToken = token();
     const code = verificationCode();
     pendingClaims.set(claimToken, {
       code,
       memberId: member.id,
-      expiresAt: Date.now() + 15 * 60 * 1000,
+      expiresAt: Date.now() + claimDurationMs,
     });
 
     if (showDevCodes()) {
@@ -378,34 +383,104 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (route === "POST /api/signup/start") {
+    const body = await readJsonBody(req);
+    const signup = normalizeSignup(body);
+    if (!signup) {
+      sendJson(res, 400, { message: "Enter your first name, last name, and a valid email. Names and city must be 100 characters or fewer; an optional phone number must contain 7 to 15 digits." });
+      return;
+    }
+    if (signupConflicts(await vipDb.listMembers(), signup)) {
+      sendJson(res, 409, { message: signupConflictMessage });
+      return;
+    }
+    const retryAfter = reserveSignupEmail(signup.email);
+    if (retryAfter) {
+      res.setHeader("Retry-After", String(retryAfter));
+      sendJson(res, 429, { message: "Too many sign-up code requests. Please wait 15 minutes before trying again." });
+      return;
+    }
+    removeExpiredClaims();
+    const claimToken = token();
+    const code = verificationCode();
+    pendingClaims.set(claimToken, { code, signup, expiresAt: Date.now() + claimDurationMs });
+    const email = await sendVerificationEmail({ member: { ...signup, name: `${signup.firstName} ${signup.lastName}` }, code });
+    if (email.status !== "sent" && !showDevCodes()) {
+      pendingClaims.delete(claimToken);
+      sendJson(res, 502, { message: "The verification email could not be sent. Please try again later or email vip@justcallmoe.com for help." });
+      return;
+    }
+    sendJson(res, 200, {
+      claimToken,
+      destination: maskDestination(signup, signup.email),
+      devCode: showDevCodes() ? code : undefined,
+      email,
+    });
+    return;
+  }
+
   if (route === "POST /api/claim/verify") {
     const body = await readJsonBody(req);
-    const claim = pendingClaims.get(String(body.claimToken || ""));
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      sendJson(res, 400, { message: "Enter your verification code." });
+      return;
+    }
+    const claimToken = String(body.claimToken || "");
+    const claim = pendingClaims.get(claimToken);
     const code = String(body.code || "").trim();
 
-    if (!claim || claim.expiresAt < Date.now() || !safeEqual(code, claim.code)) {
+    if (!claim || claim.expiresAt < Date.now()) {
+      pendingClaims.delete(claimToken);
+      sendJson(res, 400, { message: "That code expired or is no longer valid. Request a new one." });
+      return;
+    }
+    if (claim.verifying) {
+      sendJson(res, 409, { message: "Your code is already being verified. Please wait." });
+      return;
+    }
+    if (!safeEqual(code, claim.code)) {
+      claim.attempts = (claim.attempts || 0) + 1;
+      if (claim.attempts >= 6) {
+        pendingClaims.delete(claimToken);
+        sendJson(res, 400, { message: "Too many incorrect codes. Request a new one." });
+        return;
+      }
       sendJson(res, 400, { message: "That code did not match." });
       return;
     }
 
-    const member = await vipDb.getMemberById(claim.memberId);
-    if (!member) {
-      sendJson(res, 404, { message: "Member record not found." });
-      return;
+    claim.verifying = true;
+    try {
+      let updatedMember;
+      if (claim.signup) {
+        updatedMember = await registerVerifiedMember(claim.signup);
+        if (!updatedMember) {
+          pendingClaims.delete(claimToken);
+          sendJson(res, 409, { message: signupConflictMessage });
+          return;
+        }
+      } else {
+        const member = await vipDb.getMemberById(claim.memberId);
+        if (!member || isPausedStatus(member.status)) {
+          pendingClaims.delete(claimToken);
+          sendJson(res, 404, { message: "Member record is unavailable. Please contact vip@justcallmoe.com." });
+          return;
+        }
+        updatedMember = await vipDb.updateMember(member.id, {
+          claimedAt: new Date().toISOString(),
+          status: memberStatusAfterClaim(member.status),
+        });
+        if (!updatedMember) {
+          sendJson(res, 404, { message: "Member record not found." });
+          return;
+        }
+      }
+      pendingClaims.delete(claimToken);
+      const sessionToken = await createMemberSession(req, res, updatedMember.id);
+      sendJson(res, 200, { member: publicMember(updatedMember), sessionToken, createdAccount: Boolean(claim.signup) });
+    } finally {
+      claim.verifying = false;
     }
-
-    const updatedMember = await vipDb.updateMember(member.id, {
-      claimedAt: new Date().toISOString(),
-      status: memberStatusAfterClaim(member.status),
-    });
-    if (!updatedMember) {
-      sendJson(res, 404, { message: "Member record not found." });
-      return;
-    }
-    pendingClaims.delete(String(body.claimToken || ""));
-
-    const sessionToken = await createMemberSession(req, res, updatedMember.id);
-    sendJson(res, 200, { member: publicMember(updatedMember), sessionToken });
     return;
   }
 
@@ -1887,6 +1962,76 @@ function normalizePushPlatform(platform) {
     return cleanPlatform;
   }
   return "ios";
+}
+
+function normalizeSignup(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body) ||
+      ["firstName", "lastName", "email", "phone", "city"].some((key) => body[key] !== undefined && typeof body[key] !== "string")) return null;
+  const field = (key) => typeof body[key] === "string" ? body[key].trim().replace(/\s+/g, " ") : "";
+  const firstName = field("firstName");
+  const lastName = field("lastName");
+  const email = field("email").toLowerCase();
+  const rawPhone = field("phone");
+  const phone = digitsOnly(rawPhone);
+  const city = field("city");
+  if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100 || city.length > 100 ||
+      email.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) ||
+      (rawPhone && (!/^[+()\d\s.-]+$/.test(rawPhone) || phone.length < 7 || phone.length > 15))) return null;
+  return { firstName, lastName, email, phone, city };
+}
+
+function signupConflicts(members, signup) {
+  return members.some((member) => String(member.email || "").trim().toLowerCase() === signup.email ||
+    (signup.phone && digitsOnly(member.phone) === signup.phone));
+}
+
+function removeExpiredClaims() {
+  for (const [key, claim] of pendingClaims) {
+    if (claim.expiresAt < Date.now() && !claim.verifying) pendingClaims.delete(key);
+  }
+}
+
+function reserveSignupEmail(email) {
+  const now = Date.now();
+  for (const [key, limit] of signupSendLimits) {
+    if (limit.expiresAt <= now) signupSendLimits.delete(key);
+  }
+  const limits = [[email, 3], ["all", 100]];
+  for (const [key, maximum] of limits) {
+    const limit = signupSendLimits.get(key);
+    if (limit?.count >= maximum) return Math.ceil((limit.expiresAt - now) / 1000);
+  }
+  for (const [key] of limits) {
+    const limit = signupSendLimits.get(key) || { count: 0, expiresAt: now + claimDurationMs };
+    limit.count += 1;
+    signupSendLimits.set(key, limit);
+  }
+  return 0;
+}
+
+async function registerVerifiedMember(signup) {
+  // Serialize local registrations; Supabase's unique indexes also protect across processes.
+  const previous = signupCreationQueue;
+  let release;
+  signupCreationQueue = new Promise((resolve) => { release = resolve; });
+  await previous;
+  try {
+    const members = await vipDb.listMembers();
+    if (signupConflicts(members, signup)) return null;
+    try {
+      return await vipDb.createMember({
+        ...normalizeMemberRecord({ ...signup, status: "Active" }, members.length),
+        city: signup.city,
+        claimedAt: new Date().toISOString(),
+        preferences: { smsAlerts: false, emailUpdates: false, walletUpdates: false },
+      });
+    } catch (error) {
+      if (error.status === 409) return null;
+      throw error;
+    }
+  } finally {
+    release();
+  }
 }
 
 function findMemberByEmail(members, email) {

@@ -20,12 +20,28 @@ function element() {
   };
 }
 
-function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70 } = {}) {
+function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
     "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
     "[data-notification-delete-dialog]", "[data-confirm-notification-delete]", "[data-cancel-notification-delete]",
     "[data-notification-delete-title]", "[data-notification-delete-error]"].map((key) => [key, element()]));
+  if (auth) {
+    for (const key of ["[data-auth-title]", "[data-auth-description]", "[data-auth-toggle]", "[data-auth-switch]",
+      "[data-auth-switch-prompt]", "[data-verify-label]", "[data-change-identity-label]", "[data-change-identity]",
+      "[data-claim-message]", "[data-signup-message]", "[data-code-message]"]) elements[key] = element();
+    for (const [key, names] of [["[data-claim-form]", ["identity", "lastName"]],
+      ["[data-signup-form]", ["firstName", "lastName", "email", "phone", "city"]], ["[data-code-form]", ["code"]]]) {
+      const form = element();
+      form.values = Object.fromEntries(names.map((name) => [name, ""]));
+      form.controls = names.map(() => element()).concat(element());
+      form.querySelectorAll = () => form.controls;
+      form.querySelector = () => form.controls[0];
+      form.reset = () => { for (const name of names) form.values[name] = ""; };
+      form.hidden = key !== "[data-claim-form]";
+      elements[key] = form;
+    }
+  }
   if (cardNameWidth !== null) {
     const name = element();
     const area = element();
@@ -78,6 +94,7 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
   const listeners = {};
   const context = vm.createContext({
     AbortController, TypeError, URL, console,
+    FormData: class { constructor(form) { this.values = form.values; } get(key) { return this.values[key]; } },
     localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) },
     navigator: { onLine: true },
     document: {
@@ -105,6 +122,118 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
 function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
+
+const submitAuth = (form) => form.listeners.submit({ currentTarget: form, preventDefault() {} });
+
+test("existing members keep email and last-name sign-in; offline signup cannot proceed", async (t) => {
+  const calls = [];
+  const c = client(t, async (path, options) => {
+    calls.push({ path, body: JSON.parse(options.body) });
+    if (path === "/api/claim/start") return new Response(JSON.stringify({ claimToken: "existing-claim", destination: "av***@example.com", email: { status: "sent" } }));
+    return success(path);
+  }, { auth: true });
+  c.run('setAuthMode("signup")');
+  await submitAuth(c.elements["[data-signup-form]"]);
+  assert.equal(calls.length, 0);
+  assert.match(c.elements["[data-signup-message]"].textContent, /temporarily unavailable/);
+  c.run('betaApiReady = true; setAuthMode("signin")');
+  const claim = c.elements["[data-claim-form]"];
+  claim.values = { identity: "AVERY@example.com", lastName: "MITCHELL" };
+  await submitAuth(claim);
+  assert.deepEqual(calls[0], { path: "/api/claim/start", body: claim.values });
+  assert.equal(c.elements["[data-code-form]"].hidden, false);
+  assert.equal(c.elements["[data-verify-label]"].textContent, "Open VIP Portal");
+  c.elements["[data-change-identity]"].listeners.click();
+  assert.equal(claim.hidden, false);
+  assert.equal(claim.values.identity, "AVERY@example.com");
+});
+
+test("sign-up mode shares email verification, saves the session, and resets to sign-in on logout", async (t) => {
+  const calls = [];
+  let wrongCode = true;
+  const c = client(t, async (path, options) => {
+    calls.push({ path, body: options.body ? JSON.parse(options.body) : null });
+    if (path === "/api/signup/start") return new Response(JSON.stringify({ claimToken: "new-claim", destination: "ne***@example.com", email: { status: "sent" } }));
+    if (path === "/api/claim/verify") return new Response(JSON.stringify(wrongCode ? { message: "That code did not match." } :
+      { member, sessionToken: "new-session", createdAccount: true }), { status: wrongCode ? 400 : 200 });
+    return success(path);
+  }, { auth: true });
+  c.run('betaApiReady = true; setAuthMode("signup")');
+  const signup = c.elements["[data-signup-form]"];
+  const code = c.elements["[data-code-form]"];
+  assert.equal(signup.hidden, false);
+  assert.equal(c.elements["[data-claim-form]"].hidden, true);
+  assert.equal(c.elements["[data-auth-title]"].textContent, "Join Moe VIP");
+  signup.values = { firstName: "New", lastName: "Member", email: "new@example.com", phone: "", city: "" };
+  await submitAuth(signup);
+  assert.equal(calls[0].path, "/api/signup/start");
+  assert.deepEqual(calls[0].body, signup.values);
+  assert.equal(signup.hidden, true);
+  assert.equal(code.hidden, false);
+  assert.equal(c.elements["[data-auth-switch]"].hidden, true);
+  assert.equal(c.elements["[data-verify-label]"].textContent, "Create My VIP Account");
+  code.values.code = "000000";
+  await submitAuth(code);
+  assert.match(c.elements["[data-code-message]"].textContent, /did not match/);
+  assert.equal(code.hidden, false);
+  assert.equal(c.run("activeMember"), null);
+  wrongCode = false;
+  code.values.code = "246810";
+  await submitAuth(code);
+  assert.equal(c.run("activeMember.id"), member.id);
+  assert.equal(c.storage.get("jcm-vip-session"), "new-session");
+  assert.equal(c.elements["[data-auth-screen]"].hidden, true);
+  c.run("resetMemberAuth()");
+  assert.equal(signup.hidden, true);
+  assert.equal(c.elements["[data-claim-form]"].hidden, false);
+  assert.equal(c.elements["[data-auth-toggle]"].textContent, "Sign up");
+});
+
+test("sign-up failures preserve entered details and never offer verification without a sent email", async (t) => {
+  for (const response of [new Response(JSON.stringify({ message: "Sign in instead." }), { status: 409 }),
+    new Response(JSON.stringify({ message: "Wait 15 minutes." }), { status: 429 }),
+    new Response(JSON.stringify({ claimToken: "invalid", email: { status: "not_configured" } }))]) {
+    const c = client(t, async () => response, { auth: true });
+    c.run('betaApiReady = true; setAuthMode("signup")');
+    const signup = c.elements["[data-signup-form]"];
+    signup.values = { firstName: "New", lastName: "Member", email: "new@example.com", phone: "", city: "" };
+    await submitAuth(signup);
+    assert.equal(signup.hidden, false);
+    assert.equal(signup.values.email, "new@example.com");
+    assert.equal(c.elements["[data-code-form]"].hidden, true);
+    assert.equal(c.run("pendingClaim"), null);
+    assert.equal(c.elements["[data-auth-toggle]"].disabled, false);
+  }
+});
+
+test("auth requests block double submits and mode changes; editing sign-up details preserves fields", async (t) => {
+  let release;
+  let sends = 0;
+  const c = client(t, async () => {
+    sends += 1;
+    await new Promise((resolve) => { release = resolve; });
+    return new Response(JSON.stringify({ claimToken: "claim", devCode: "246810", destination: "ne***@example.com" }));
+  }, { auth: true });
+  c.run('betaApiReady = true; setAuthMode("signup")');
+  const signup = c.elements["[data-signup-form]"];
+  signup.values.email = "new@example.com";
+  const pending = submitAuth(signup);
+  await submitAuth(signup);
+  c.run('setAuthMode("signin")');
+  assert.equal(c.run("authMode"), "signup");
+  assert.equal(c.elements["[data-auth-toggle]"].disabled, true);
+  assert.equal(sends, 1);
+  release();
+  await pending;
+  c.elements["[data-change-identity]"].listeners.click();
+  assert.equal(signup.hidden, false);
+  assert.equal(signup.values.email, "new@example.com");
+  assert.equal(c.run("pendingClaim"), null);
+  assert.equal(c.elements["[data-code-form]"].hidden, true);
+  c.elements["[data-auth-toggle]"].listeners.click();
+  assert.equal(c.elements["[data-claim-form]"].hidden, false);
+  assert.equal(c.elements["[data-auth-title]"].textContent, "Claim Your VIP Card");
+});
 
 test("card names stack only when too wide and retain every character within the available space", (t) => {
   const c = client(t, success, { cardNameWidth: 120 });

@@ -674,9 +674,11 @@ export function createDatabase({ rootDir, seedDatabase }) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
+      const error = new Error(
         `Supabase ${method} ${table} failed (${response.status}): ${errorText || response.statusText}`
       );
+      error.status = response.status;
+      throw error;
     }
 
     if (response.status === 204) return null;
