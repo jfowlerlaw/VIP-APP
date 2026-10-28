@@ -720,7 +720,12 @@ function memberFromRow(row) {
     cardName: row.card_name || name,
     email: row.email || "",
     phone: row.phone || "",
+    addressLine1: row.address_line1 || "",
+    addressLine2: row.address_line2 || "",
     city: row.city || "",
+    state: row.state || "",
+    postalCode: row.postal_code || "",
+    country: row.country || "",
     memberId: row.member_id || "",
     joined: row.joined || "",
     status: row.status || "Unclaimed",
@@ -741,7 +746,12 @@ function memberToRow(member) {
     card_name: member.cardName || name,
     email: member.email || "",
     phone: member.phone || "",
+    address_line1: member.addressLine1 || "",
+    address_line2: member.addressLine2 || "",
     city: member.city || "",
+    state: member.state || "",
+    postal_code: member.postalCode || "",
+    country: member.country || "",
     member_id: member.memberId || "",
     joined: member.joined || "",
     status: member.status || "Unclaimed",
@@ -758,7 +768,12 @@ function memberPatchToRow(patch) {
   if ("cardName" in patch) row.card_name = patch.cardName;
   if ("email" in patch) row.email = patch.email;
   if ("phone" in patch) row.phone = patch.phone;
+  if ("addressLine1" in patch) row.address_line1 = patch.addressLine1;
+  if ("addressLine2" in patch) row.address_line2 = patch.addressLine2;
   if ("city" in patch) row.city = patch.city;
+  if ("state" in patch) row.state = patch.state;
+  if ("postalCode" in patch) row.postal_code = patch.postalCode;
+  if ("country" in patch) row.country = patch.country;
   if ("memberId" in patch) row.member_id = patch.memberId;
   if ("joined" in patch) row.joined = patch.joined;
   if ("status" in patch) row.status = patch.status;

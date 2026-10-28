@@ -1470,7 +1470,9 @@ async function requestAuthCode(event) {
     if (message) message.textContent = "The VIP portal is temporarily unavailable. Please try again in a few minutes or email vip@justcallmoe.com.";
     return;
   }
-  const fields = signingUp ? ["firstName", "lastName", "email", "phone", "city"] : ["identity", "lastName"];
+  const fields = signingUp
+    ? ["firstName", "lastName", "email", "phone", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]
+    : ["identity", "lastName"];
   const body = Object.fromEntries(fields.map((field) => [field, String(data.get(field) || "")]));
   setAuthBusy(true);
   if (message) message.textContent = "Sending your verification code...";

@@ -502,6 +502,19 @@ td small {
   display: block;
 }
 
+.member-contact {
+  min-width: 200px;
+  overflow-wrap: anywhere;
+}
+
+.member-mailing-address {
+  max-width: 30ch;
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
 .status-pill {
   display: inline-grid;
   place-items: center;

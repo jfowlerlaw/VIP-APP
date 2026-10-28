@@ -31,7 +31,7 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
       "[data-auth-switch-prompt]", "[data-verify-label]", "[data-change-identity-label]", "[data-change-identity]",
       "[data-claim-message]", "[data-signup-message]", "[data-code-message]"]) elements[key] = element();
     for (const [key, names] of [["[data-claim-form]", ["identity", "lastName"]],
-      ["[data-signup-form]", ["firstName", "lastName", "email", "phone", "city"]], ["[data-code-form]", ["code"]]]) {
+      ["[data-signup-form]", ["firstName", "lastName", "email", "phone", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]], ["[data-code-form]", ["code"]]]) {
       const form = element();
       form.values = Object.fromEntries(names.map((name) => [name, ""]));
       form.controls = names.map(() => element()).concat(element());
@@ -164,7 +164,8 @@ test("sign-up mode shares email verification, saves the session, and resets to s
   assert.equal(signup.hidden, false);
   assert.equal(c.elements["[data-claim-form]"].hidden, true);
   assert.equal(c.elements["[data-auth-title]"].textContent, "Join Moe VIP");
-  signup.values = { firstName: "New", lastName: "Member", email: "new@example.com", phone: "", city: "" };
+  signup.values = { firstName: "New", lastName: "Member", email: "new@example.com", phone: "",
+    addressLine1: "123 Example Street", addressLine2: "Apt 4B", city: "Orlando", state: "FL", postalCode: "32801", country: "United States" };
   await submitAuth(signup);
   assert.equal(calls[0].path, "/api/signup/start");
   assert.deepEqual(calls[0].body, signup.values);
@@ -196,7 +197,8 @@ test("sign-up failures preserve entered details and never offer verification wit
     const c = client(t, async () => response, { auth: true });
     c.run('betaApiReady = true; setAuthMode("signup")');
     const signup = c.elements["[data-signup-form]"];
-    signup.values = { firstName: "New", lastName: "Member", email: "new@example.com", phone: "", city: "" };
+    signup.values = { firstName: "New", lastName: "Member", email: "new@example.com", phone: "",
+      addressLine1: "123 Example Street", addressLine2: "Apt 4B", city: "Orlando", state: "FL", postalCode: "32801", country: "United States" };
     await submitAuth(signup);
     assert.equal(signup.hidden, false);
     assert.equal(signup.values.email, "new@example.com");

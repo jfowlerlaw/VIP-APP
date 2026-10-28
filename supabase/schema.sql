@@ -8,7 +8,12 @@ create table if not exists public.vip_members (
   card_name text not null default '',
   email text not null default '',
   phone text not null default '',
+  address_line1 text not null default '',
+  address_line2 text not null default '',
   city text not null default '',
+  state text not null default '',
+  postal_code text not null default '',
+  country text not null default '',
   member_id text not null default '',
   joined text not null default '',
   status text not null default 'Unclaimed',
@@ -23,6 +28,11 @@ create table if not exists public.vip_members (
 alter table public.vip_members
   add column if not exists first_name text not null default '',
   add column if not exists last_name text not null default '',
+  add column if not exists address_line1 text not null default '',
+  add column if not exists address_line2 text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists postal_code text not null default '',
+  add column if not exists country text not null default '',
   add column if not exists password_hash text not null default '',
   add column if not exists password_set_at timestamptz;
 

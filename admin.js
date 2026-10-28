@@ -316,6 +316,15 @@ function addMemberRow(member, status = "Active", placement = "prepend") {
   row.querySelector("strong").textContent = name;
   row.querySelector("small").textContent = city || "Orlando";
   row.children[1].textContent = email || "missing email";
+  row.children[1].classList.add("member-contact");
+  if (member.addressLine1) {
+    const address = document.createElement("small");
+    address.className = "member-mailing-address";
+    const region = [member.state, member.postalCode].filter(Boolean).join(" ");
+    const locality = [city, region].filter(Boolean).join(", ");
+    address.textContent = [member.addressLine1, member.addressLine2, locality, member.country].filter(Boolean).join("\n");
+    row.children[1].append(address);
+  }
   row.children[2].textContent = memberId;
   const pill = row.querySelector(".status-pill");
   pill.textContent = visibleStatus;

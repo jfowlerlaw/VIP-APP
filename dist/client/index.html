@@ -128,8 +128,29 @@
                   <label for="signup-phone">Phone (optional)</label>
                   <input id="signup-phone" name="phone" type="tel" autocomplete="tel" maxlength="30">
 
-                  <label for="signup-city">City (optional)</label>
-                  <input id="signup-city" name="city" type="text" autocomplete="address-level2" maxlength="100">
+                  <fieldset class="signup-address">
+                    <legend>Mailing address</legend>
+                    <label for="signup-address-line1">Street address</label>
+                    <input id="signup-address-line1" name="addressLine1" type="text" autocomplete="address-line1" maxlength="200" required>
+
+                    <label for="signup-address-line2">Apartment, suite, or unit (optional)</label>
+                    <input id="signup-address-line2" name="addressLine2" type="text" autocomplete="address-line2" maxlength="200">
+
+                    <label for="signup-city">City</label>
+                    <input id="signup-city" name="city" type="text" autocomplete="address-level2" maxlength="100" required>
+
+                    <div class="signup-name-fields">
+                      <label for="signup-state">State / province
+                        <input id="signup-state" name="state" type="text" autocomplete="address-level1" maxlength="100" required>
+                      </label>
+                      <label for="signup-postal-code">ZIP / postal code
+                        <input id="signup-postal-code" name="postalCode" type="text" autocomplete="postal-code" maxlength="20" required>
+                      </label>
+                    </div>
+
+                    <label for="signup-country">Country</label>
+                    <input id="signup-country" name="country" type="text" autocomplete="country-name" value="United States" maxlength="100" required>
+                  </fieldset>
 
                   <button class="primary-action full-width" type="submit">
                     <i data-lucide="user-plus" aria-hidden="true"></i>

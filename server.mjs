@@ -387,7 +387,7 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req);
     const signup = normalizeSignup(body);
     if (!signup) {
-      sendJson(res, 400, { message: "Enter your first name, last name, and a valid email. Names and city must be 100 characters or fewer; an optional phone number must contain 7 to 15 digits." });
+      sendJson(res, 400, { message: "Enter your name, a valid email, and your full mailing address: street, city, state/province, ZIP/postal code, and country. Check the ZIP/postal code and any optional phone number." });
       return;
     }
     if (signupConflicts(await vipDb.listMembers(), signup)) {
@@ -1762,7 +1762,12 @@ function normalizeMemberRecord(record, index = 0) {
     cardName: String(recordValue(record, ["cardName", "card_name", "card name"]) || name).trim(),
     email,
     phone,
+    addressLine1: String(recordValue(record, ["addressLine1", "address_line1", "street_address", "street", "address"]) || "").trim(),
+    addressLine2: String(recordValue(record, ["addressLine2", "address_line2", "address2", "apartment", "unit"]) || "").trim(),
     city: String(recordValue(record, ["city", "location", "market"]) || "Orlando").trim(),
+    state: String(recordValue(record, ["state", "province", "state_province"]) || "").trim(),
+    postalCode: String(recordValue(record, ["postalCode", "postal_code", "zip", "zip_code", "zipcode"]) || "").trim(),
+    country: String(recordValue(record, ["country"]) || "").trim(),
     memberId: recordValue(record, ["memberId", "member_id", "member id", "vip_id", "vip id"]) || nextMemberId(index),
     joined,
     status: String(recordValue(record, ["status", "vip_status", "vip status"]) || "Unclaimed"),
@@ -1898,7 +1903,12 @@ function publicMember(member) {
     cardName: member.cardName || name,
     email: member.email,
     phone: member.phone,
+    addressLine1: member.addressLine1 || "",
+    addressLine2: member.addressLine2 || "",
     city: member.city,
+    state: member.state || "",
+    postalCode: member.postalCode || "",
+    country: member.country || "",
     memberId: member.memberId,
     joined: member.joined,
     status,
@@ -1966,18 +1976,30 @@ function normalizePushPlatform(platform) {
 
 function normalizeSignup(body) {
   if (!body || typeof body !== "object" || Array.isArray(body) ||
-      ["firstName", "lastName", "email", "phone", "city"].some((key) => body[key] !== undefined && typeof body[key] !== "string")) return null;
+      ["firstName", "lastName", "email", "phone", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]
+        .some((key) => body[key] !== undefined && typeof body[key] !== "string")) return null;
   const field = (key) => typeof body[key] === "string" ? body[key].trim().replace(/\s+/g, " ") : "";
   const firstName = field("firstName");
   const lastName = field("lastName");
   const email = field("email").toLowerCase();
   const rawPhone = field("phone");
   const phone = digitsOnly(rawPhone);
+  const addressLine1 = field("addressLine1");
+  const addressLine2 = field("addressLine2");
   const city = field("city");
-  if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100 || city.length > 100 ||
+  const isUnitedStates = /^(us|usa|united states(?: of america)?)$/i.test(field("country"));
+  const country = isUnitedStates ? "United States" : field("country");
+  const rawState = field("state");
+  const state = isUnitedStates && rawState.length === 2 ? rawState.toUpperCase() : rawState;
+  let postalCode = field("postalCode").toUpperCase();
+  if (isUnitedStates && /^\d{9}$/.test(postalCode)) postalCode = `${postalCode.slice(0, 5)}-${postalCode.slice(5)}`;
+  if (!firstName || !lastName || firstName.length > 100 || lastName.length > 100 ||
+      !addressLine1 || addressLine1.length > 200 || addressLine2.length > 200 ||
+      !city || city.length > 100 || !state || state.length > 100 || !country || country.length > 100 ||
+      !postalCode || postalCode.length > 20 || (isUnitedStates && !/^\d{5}(?:-\d{4})?$/.test(postalCode)) ||
       email.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) ||
       (rawPhone && (!/^[+()\d\s.-]+$/.test(rawPhone) || phone.length < 7 || phone.length > 15))) return null;
-  return { firstName, lastName, email, phone, city };
+  return { firstName, lastName, email, phone, addressLine1, addressLine2, city, state, postalCode, country };
 }
 
 function signupConflicts(members, signup) {
