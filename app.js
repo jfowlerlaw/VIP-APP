@@ -12,6 +12,13 @@ const emailVerifyForm = document.querySelector("[data-email-verify-form]");
 const emailDetails = document.querySelector("[data-email-details]");
 const emailChangeStatus = document.querySelector("[data-email-change-status]");
 const cancelEmailChange = document.querySelector("[data-cancel-email-change]");
+const deleteAccountButton = document.querySelector("[data-delete-account]");
+const accountDeleteDialog = document.querySelector("[data-account-delete-dialog]");
+const accountDeleteForm = document.querySelector("[data-account-delete-form]");
+const accountDeleteStatus = document.querySelector("[data-account-delete-status]");
+const startAccountDelete = document.querySelector("[data-start-account-delete]");
+const resendAccountDelete = document.querySelector("[data-resend-account-delete]");
+const cancelAccountDelete = document.querySelector("[data-cancel-account-delete]");
 const profileFieldNames = ["firstName", "lastName", "phone", "cardName", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"];
 const etchedName = document.querySelector(".etched-name");
 const cardNameArea = document.querySelector(".card-name-area");
@@ -85,6 +92,7 @@ let profileDirty = false;
 let accountBusy = false;
 let accountEpoch = 0;
 let pendingEmailChange = null;
+let pendingAccountDeletion = null;
 let betaApiReady = false;
 let toastTimer;
 let pushListenersAttached = false;
@@ -820,6 +828,7 @@ function resetMemberAuth() {
   if (profileDetails) profileDetails.open = false;
   setAccountStatus(profileStatus, "");
   resetEmailChange();
+  resetAccountDeletion();
   activeMember = null;
   pendingMember = null;
   pendingClaim = null;
@@ -1703,11 +1712,15 @@ function setAccountStatus(element, message) {
 
 function setAccountBusy(busy) {
   accountBusy = busy;
-  for (const form of [profileForm, emailChangeForm, emailVerifyForm]) {
+  for (const form of [profileForm, emailChangeForm, emailVerifyForm, accountDeleteForm]) {
     form?.setAttribute("aria-busy", String(busy));
     form?.querySelectorAll("input, button").forEach((control) => { control.disabled = busy; });
   }
   if (cancelEmailChange) cancelEmailChange.disabled = busy;
+  for (const button of [deleteAccountButton, startAccountDelete, resendAccountDelete, cancelAccountDelete]) {
+    if (button) button.disabled = busy;
+  }
+  accountDeleteDialog?.setAttribute("aria-busy", String(busy));
   memberLogoutButtons.forEach((button) => { button.disabled = busy; });
 }
 
@@ -1857,6 +1870,93 @@ cancelEmailChange?.addEventListener("click", async () => {
   } finally {
     if (epoch === accountEpoch) setAccountBusy(false);
   }
+});
+
+function resetAccountDeletion() {
+  pendingAccountDeletion = null;
+  accountDeleteForm?.reset();
+  if (accountDeleteForm) accountDeleteForm.hidden = true;
+  if (startAccountDelete) startAccountDelete.hidden = false;
+  setAccountStatus(accountDeleteStatus, "");
+  if (accountDeleteDialog?.open) accountDeleteDialog.close();
+}
+
+deleteAccountButton?.addEventListener("click", () => {
+  if (accountBusy || !activeMember || !accountDeleteDialog) return;
+  resetAccountDeletion();
+  accountDeleteDialog.showModal();
+  cancelAccountDelete?.focus();
+});
+
+async function requestAccountDeletionCode() {
+  if (accountBusy || !activeMember) return;
+  const epoch = accountEpoch;
+  const memberId = activeMember.id;
+  setAccountBusy(true);
+  setAccountStatus(accountDeleteStatus, "Sending a deletion code to your current email...");
+  try {
+    const result = await apiRequest("/api/profile/delete/start", { method: "POST", body: "{}" });
+    if (!accountRequestCurrent(epoch, memberId)) return;
+    if (!result.deleteToken) throw new Error("The deletion code could not be sent. Your account has not been deleted.");
+    pendingAccountDeletion = result.deleteToken;
+    if (startAccountDelete) startAccountDelete.hidden = true;
+    if (accountDeleteForm) {
+      accountDeleteForm.reset();
+      accountDeleteForm.hidden = false;
+    }
+    setAccountStatus(accountDeleteStatus, `Code sent to ${result.destination}. It expires in 15 minutes. Your account will only be deleted after you confirm below.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`);
+  } catch (error) {
+    if (accountRequestCurrent(epoch, memberId)) {
+      if (error.status === 502) {
+        pendingAccountDeletion = null;
+        if (accountDeleteForm) accountDeleteForm.hidden = true;
+        if (startAccountDelete) startAccountDelete.hidden = false;
+      }
+      accountRequestError(accountDeleteStatus, error);
+    }
+  } finally {
+    if (epoch === accountEpoch) setAccountBusy(false);
+  }
+  if (accountRequestCurrent(epoch, memberId) && pendingAccountDeletion) accountDeleteForm?.querySelector("input")?.focus();
+}
+
+startAccountDelete?.addEventListener("click", requestAccountDeletionCode);
+resendAccountDelete?.addEventListener("click", requestAccountDeletionCode);
+accountDeleteForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (accountBusy || !activeMember || !pendingAccountDeletion) return;
+  const epoch = accountEpoch;
+  const memberId = activeMember.id;
+  const code = String(new FormData(accountDeleteForm).get("code") || "").trim();
+  setAccountBusy(true);
+  setAccountStatus(accountDeleteStatus, "Deleting your account...");
+  try {
+    const result = await apiRequest("/api/profile", { method: "DELETE", body: JSON.stringify({ deleteToken: pendingAccountDeletion, code }) });
+    if (!accountRequestCurrent(epoch, memberId)) return;
+    if (result.ok !== true) throw new Error("The deletion could not be confirmed. Please try again.");
+    clearStoredPushToken();
+    resetMemberAuth();
+    void disablePushNotifications({ silent: true });
+    if (claimMessage) claimMessage.textContent = "Your VIP account and associated app data have been deleted.";
+    showToast("Your account has been deleted.");
+  } catch (error) {
+    if (accountRequestCurrent(epoch, memberId)) accountRequestError(accountDeleteStatus, error);
+  } finally {
+    if (epoch === accountEpoch) setAccountBusy(false);
+  }
+});
+
+cancelAccountDelete?.addEventListener("click", () => {
+  if (accountBusy) return;
+  resetAccountDeletion();
+  deleteAccountButton?.focus();
+});
+accountDeleteDialog?.addEventListener("cancel", (event) => {
+  if (accountBusy) event.preventDefault();
+});
+accountDeleteDialog?.addEventListener("close", resetAccountDeletion);
+document.querySelectorAll("[data-privacy-link]").forEach((link) => {
+  link.addEventListener("click", (event) => openExternalUrl(event, link.href));
 });
 
 memberLogoutButtons.forEach((button) => {

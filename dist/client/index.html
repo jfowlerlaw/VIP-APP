@@ -178,6 +178,7 @@
                   <button type="button" data-auth-toggle>Sign up</button>
                 </p>
                 <a class="claim-help" href="mailto:vip@justcallmoe.com?subject=VIP%20portal%20help">Having trouble? Email vip@justcallmoe.com</a>
+                <a class="privacy-link" href="https://justcallmoe.com/privacy-policy/" target="_blank" rel="noopener noreferrer" data-privacy-link>Privacy Policy<i data-lucide="external-link" aria-hidden="true"></i></a>
               </div>
             </section>
 
@@ -491,6 +492,10 @@
                     </button>
                   </div>
                 </div>
+                <div class="account-settings-links">
+                  <a class="privacy-link" href="https://justcallmoe.com/privacy-policy/" target="_blank" rel="noopener noreferrer" data-privacy-link><i data-lucide="shield-check" aria-hidden="true"></i>Privacy Policy<i data-lucide="external-link" aria-hidden="true"></i></a>
+                  <button class="delete-account-link" type="button" data-delete-account><i data-lucide="user-round-x" aria-hidden="true"></i>Delete account</button>
+                </div>
               </section>
 
               <p class="app-version" data-app-version>Version details unavailable</p>
@@ -577,6 +582,23 @@
             <i data-lucide="trash-2" aria-hidden="true"></i>Delete
           </button>
         </div>
+      </div>
+    </dialog>
+
+    <dialog class="notification-delete-dialog account-delete-dialog" data-account-delete-dialog aria-labelledby="account-delete-heading" aria-describedby="account-delete-description">
+      <div class="notification-delete-content">
+        <h2 id="account-delete-heading">Delete account?</h2>
+        <p id="account-delete-description">Your VIP profile, contact details, mailing address, help requests, inbox history, and push registrations will be permanently removed. This cannot be undone.</p>
+        <p class="fine-print">Emails already sent to the VIP desk and records outside this app are not affected.</p>
+        <p class="fine-print" data-account-delete-status role="status" hidden></p>
+        <button class="primary-action full-width" type="button" data-start-account-delete><i data-lucide="mail-check" aria-hidden="true"></i>Email Deletion Code</button>
+        <form class="profile-form" data-account-delete-form hidden>
+          <label for="account-delete-code">Deletion code from your email</label>
+          <input id="account-delete-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required>
+          <button class="secondary-action full-width" type="button" data-resend-account-delete><i data-lucide="refresh-cw" aria-hidden="true"></i>Resend Code</button>
+          <button class="primary-action full-width" type="submit"><i data-lucide="trash-2" aria-hidden="true"></i>Delete My Account</button>
+        </form>
+        <button class="secondary-action full-width" type="button" data-cancel-account-delete autofocus>Cancel</button>
       </div>
     </dialog>
 

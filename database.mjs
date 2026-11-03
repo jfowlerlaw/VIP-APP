@@ -151,8 +151,9 @@ export function createDatabase({ rootDir, seedDatabase }) {
       db.requests = db.requests.filter((request) => request.memberId !== id);
       db.pushTokens = (db.pushTokens || []).filter((pushToken) => pushToken.memberId !== id);
       db.memberSessions = (db.memberSessions || []).filter((session) => session.memberId !== id);
+      const removedNotifications = new Set((db.notifications || []).filter((item) => item.memberId === id).map((item) => item.id));
       db.notifications = (db.notifications || []).filter((item) => item.memberId !== id);
-      db.notificationReads = (db.notificationReads || []).filter((item) => item.memberId !== id);
+      db.notificationReads = (db.notificationReads || []).filter((item) => item.memberId !== id && !removedNotifications.has(item.notificationId));
       await writeLocalDb(db);
 
       return {
@@ -172,10 +173,12 @@ export function createDatabase({ rootDir, seedDatabase }) {
 
     if (!memberRows[0]) return null;
 
-    await supabaseRequest("vip_members", {
+    const deletedRows = await supabaseRequest("vip_members", {
       method: "DELETE",
-      query: queryString({ id: `eq.${id}` }),
+      query: queryString({ select: "id", id: `eq.${id}` }),
+      headers: { Prefer: "return=representation" },
     });
+    if (!deletedRows?.some((row) => row.id === id)) throw new Error("Member deletion could not be confirmed.");
 
     return {
       deletedMember: memberFromRow(memberRows[0]),

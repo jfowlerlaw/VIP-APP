@@ -21,6 +21,8 @@ const pendingClaims = new Map();
 const signupSendLimits = new Map();
 const emailChangeSendLimits = new Map();
 const pendingEmailChanges = new Map();
+const accountDeletionSendLimits = new Map();
+const pendingAccountDeletions = new Map();
 let memberWriteQueue = Promise.resolve();
 const mailingFieldNames = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"];
 const claimDurationMs = 1000 * 60 * 15;
@@ -659,6 +661,83 @@ async function handleApi(req, res, url) {
       sendJson(res, 409, { message: "That email is already connected to another VIP account." });
     } finally {
       pending.verifying = false;
+    }
+    return;
+  }
+
+  if (route === "POST /api/profile/delete/start" || route === "DELETE /api/profile") {
+    const member = await requireMember(req);
+    if (!member) {
+      sendJson(res, 401, { message: "Please sign in to delete your account." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      sendJson(res, 400, { message: "Enter the account deletion code from your email." });
+      return;
+    }
+    if (route === "POST /api/profile/delete/start") {
+      if (pendingAccountDeletions.get(member.id)?.deleting) {
+        sendJson(res, 409, { message: "Your account is being deleted. Please wait." });
+        return;
+      }
+      const retryAfter = reserveVerificationEmail(accountDeletionSendLimits, [[member.id, 3], ["all", 100]]);
+      if (retryAfter) {
+        res.setHeader("Retry-After", String(retryAfter));
+        sendJson(res, 429, { message: "Too many deletion code requests. Please wait 15 minutes before trying again." });
+        return;
+      }
+      for (const [id, pending] of pendingAccountDeletions) {
+        if (pending.expiresAt < Date.now() && !pending.deleting) pendingAccountDeletions.delete(id);
+      }
+      const pending = { token: token(), email: member.email, code: verificationCode(), expiresAt: Date.now() + claimDurationMs, attempts: 0 };
+      pendingAccountDeletions.set(member.id, pending);
+      const email = await sendVerificationEmail({ member, code: pending.code, purpose: "account-deletion" });
+      if (pendingAccountDeletions.get(member.id) !== pending) {
+        sendJson(res, 409, { message: "Your account or deletion request changed. Request a new code." });
+        return;
+      }
+      if (email.status !== "sent" && !showDevCodes()) {
+        pendingAccountDeletions.delete(member.id);
+        sendJson(res, 502, { message: "The deletion code could not be sent. Your account has not been deleted. Please try again later." });
+        return;
+      }
+      sendJson(res, 200, { deleteToken: pending.token, destination: maskDestination(member, member.email), devCode: showDevCodes() ? pending.code : undefined });
+      return;
+    }
+    const pending = pendingAccountDeletions.get(member.id);
+    if (!pending || pending.token !== body.deleteToken || pending.expiresAt < Date.now()) {
+      if (pending?.expiresAt < Date.now()) pendingAccountDeletions.delete(member.id);
+      sendJson(res, 400, { message: "That deletion code expired or is no longer valid. Request a new one." });
+      return;
+    }
+    if (pending.deleting) {
+      sendJson(res, 409, { message: "Your account is already being deleted. Please wait." });
+      return;
+    }
+    if (!safeEqual(String(body.code || "").trim(), pending.code)) {
+      pending.attempts += 1;
+      if (pending.attempts >= 6) pendingAccountDeletions.delete(member.id);
+      sendJson(res, 400, { message: pending.attempts >= 6 ? "Too many incorrect codes. Request a new one." : "That deletion code did not match." });
+      return;
+    }
+    pending.deleting = true;
+    try {
+      const result = await withMemberWrite(async () => {
+        const current = await vipDb.getMemberById(member.id);
+        if (!current || current.email !== pending.email || pendingAccountDeletions.get(member.id) !== pending) return null;
+        return vipDb.deleteMember(member.id);
+      });
+      if (!result) {
+        pendingAccountDeletions.delete(member.id);
+        sendJson(res, 409, { message: "Your account changed. Request a new deletion code." });
+        return;
+      }
+      await removeMemberSessions(member.id);
+      clearCookie(res, "vip_session");
+      sendJson(res, 200, { ok: true });
+    } finally {
+      pending.deleting = false;
     }
     return;
   }
@@ -1741,7 +1820,8 @@ async function sendVerificationEmail({ member, code, purpose = "signin", propose
   const content = [
     `Hi ${member.firstName || member.name || "there"},`,
     "",
-    purpose === "email-change-current" ? `Use this code to approve changing your Moe VIP email address to ${proposedEmail}:`
+    purpose === "account-deletion" ? "Use this code only if you want to permanently delete your Moe VIP account and its associated app data:"
+      : purpose === "email-change-current" ? `Use this code to approve changing your Moe VIP email address to ${proposedEmail}:`
       : purpose === "email-change" ? "Use this code to confirm the new email address for your Moe VIP account:"
         : "Use this code to finish signing in to your Just Call Moe VIP portal:",
     "",
@@ -1758,7 +1838,8 @@ async function sendVerificationEmail({ member, code, purpose = "signin", propose
     personalizations: [
       {
         to: [{ email: memberEmail, name: member.name }],
-        subject: purpose === "email-change-current" ? "Approve your Moe VIP email change"
+        subject: purpose === "account-deletion" ? "Confirm deletion of your Moe VIP account"
+          : purpose === "email-change-current" ? "Approve your Moe VIP email change"
           : purpose === "email-change" ? "Confirm your new Moe VIP email" : "Your Just Call Moe VIP sign-in code",
       },
     ],
@@ -2398,6 +2479,7 @@ async function forgetMemberSession(sessionToken) {
 
 async function removeMemberSessions(memberId) {
   pendingEmailChanges.delete(memberId);
+  pendingAccountDeletions.delete(memberId);
   for (const [sessionToken, session] of memberSessions.entries()) {
     if (session.memberId === memberId) {
       memberSessions.delete(sessionToken);

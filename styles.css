@@ -489,6 +489,60 @@ img {
   text-decoration: none;
 }
 
+.privacy-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+.privacy-link svg,
+.delete-account-link svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.account-settings-links {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.delete-account-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  color: var(--red);
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.account-delete-dialog .profile-form {
+  padding: 0;
+}
+
+.account-delete-dialog button {
+  padding: 0 10px;
+  font-size: 0.85rem;
+}
+
+.account-delete-dialog [hidden] {
+  display: none;
+}
+
 .brand-logo {
   width: 154px;
   height: auto;

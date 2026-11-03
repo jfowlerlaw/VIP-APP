@@ -55,7 +55,9 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
   }
   if (profile) {
     for (const key of ["[data-profile-details]", "[data-profile-status]", "[data-email-details]", "[data-email-change-status]",
-      "[data-current-email]", "[data-cancel-profile]", "[data-cancel-email-change]", "[data-resend-email-change]", ".member-summary h2"]) elements[key] = element();
+      "[data-current-email]", "[data-cancel-profile]", "[data-cancel-email-change]", "[data-resend-email-change]", ".member-summary h2",
+      "[data-delete-account]", "[data-account-delete-dialog]", "[data-account-delete-status]", "[data-start-account-delete]",
+      "[data-resend-account-delete]", "[data-cancel-account-delete]"]) elements[key] = element();
     elements["[data-profile-form]"] = formElement(["firstName", "lastName", "phone", "cardName", "addressLine1", "addressLine2", "city", "state", "postalCode", "country"]);
     elements["[data-profile-form]"].controls.push(elements["[data-cancel-profile]"]);
     elements["[data-name-input]"] = elements["[data-profile-form]"].elements.namedItem("cardName");
@@ -63,6 +65,12 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
     elements["[data-email-verify-form]"] = formElement(["currentCode", "code"]);
     elements["[data-email-verify-form]"].controls.push(elements["[data-resend-email-change]"]);
     elements["[data-email-verify-form]"].hidden = true;
+    elements["[data-account-delete-form]"] = formElement(["code"]);
+    elements["[data-account-delete-form]"].hidden = true;
+    elements["[data-account-delete-form]"].controls.push(elements["[data-resend-account-delete]"]);
+    const accountDialog = elements["[data-account-delete-dialog]"];
+    accountDialog.showModal = () => { accountDialog.open = true; };
+    accountDialog.close = () => { accountDialog.open = false; accountDialog.listeners.close?.(); };
   }
   if (cardNameWidth !== null) {
     const name = element();
@@ -150,6 +158,108 @@ function success(path) {
 const submitAuth = (form) => form.listeners.submit({ currentTarget: form, preventDefault() {} });
 const profileMember = { ...member, firstName: "Avery", lastName: "Mitchell", cardName: member.name, phone: "4075550188",
   addressLine1: "123 Example Street", addressLine2: "Apt 4B", city: "Orlando", state: "FL", postalCode: "32801", country: "United States" };
+
+test("account deletion opens a confirmation, supports resends, and clears sign-in and push data only after confirmed success", async (t) => {
+  const calls = [];
+  let sends = 0;
+  let wrong = true;
+  const c = client(t, async (path, options) => {
+    if (path === "/api/profile/delete/start") {
+      calls.push({ path, method: options.method });
+      return new Response(JSON.stringify({ deleteToken: `deletion-${++sends}`, destination: "av***@example.com" }));
+    }
+    if (path === "/api/profile" && options.method === "DELETE") {
+      calls.push({ path, method: options.method, body: JSON.parse(options.body) });
+      return new Response(JSON.stringify(wrong ? { message: "That deletion code did not match." } : { ok: true }), { status: wrong ? 400 : 200 });
+    }
+    return success(path);
+  }, { profile: true, auth: true });
+  c.context.member = profileMember;
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  c.storage.set("jcm-vip-push-token", "saved-push");
+  const click = (selector) => c.elements[selector].listeners.click();
+  click("[data-delete-account]");
+  assert.equal(c.elements["[data-account-delete-dialog]"].open, true);
+  assert.equal(c.elements["[data-cancel-account-delete]"].focused, true);
+  assert.equal(calls.length, 0);
+  click("[data-cancel-account-delete]");
+  assert.equal(c.elements["[data-account-delete-dialog]"].open, false);
+  assert.equal(c.run("activeMember.id"), member.id);
+  click("[data-delete-account]");
+  await click("[data-start-account-delete]");
+  const form = c.elements["[data-account-delete-form]"];
+  assert.equal(form.hidden, false);
+  assert.equal(c.storage.get("jcm-vip-session"), "saved-session");
+  form.values.code = "wrong";
+  await submitAuth(form);
+  assert.match(c.elements["[data-account-delete-status]"].textContent, /did not match/);
+  assert.equal(c.run("activeMember.id"), member.id);
+  assert.equal(c.storage.get("jcm-vip-push-token"), "saved-push");
+  await click("[data-resend-account-delete]");
+  assert.equal(sends, 2);
+  assert.equal(form.values.code, "");
+  wrong = false;
+  form.values.code = "246810";
+  await submitAuth(form);
+  assert.deepEqual(calls.at(-1).body, { deleteToken: "deletion-2", code: "246810" });
+  assert.equal(c.run("activeMember"), null);
+  assert.equal(c.storage.get("jcm-vip-session"), undefined);
+  assert.equal(c.storage.get("jcm-vip-push-token"), undefined);
+  assert.equal(c.run("pendingAccountDeletion"), null);
+  assert.equal(c.elements["[data-account-delete-dialog]"].open, false);
+  assert.equal(c.elements["[data-claim-form]"].hidden, false);
+  assert.match(c.elements["[data-claim-message]"].textContent, /have been deleted/);
+});
+
+test("failed deletion emails and unconfirmed deletion responses preserve the account", async (t) => {
+  let failEmail = true;
+  const c = client(t, async (path) => {
+    if (path === "/api/profile/delete/start") return new Response(JSON.stringify(failEmail ? { message: "Email failed. Your account has not been deleted." } :
+      { deleteToken: "pending", destination: "av***@example.com" }), { status: failEmail ? 502 : 200 });
+    if (path === "/api/profile") return new Response(JSON.stringify({}));
+    return success(path);
+  }, { profile: true });
+  c.context.member = profileMember;
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  c.elements["[data-delete-account]"].listeners.click();
+  await c.elements["[data-start-account-delete]"].listeners.click();
+  assert.equal(c.run("pendingAccountDeletion"), null);
+  assert.equal(c.elements["[data-account-delete-form]"].hidden, true);
+  assert.match(c.elements["[data-account-delete-status]"].textContent, /not been deleted/);
+  failEmail = false;
+  await c.elements["[data-start-account-delete]"].listeners.click();
+  await submitAuth(c.elements["[data-account-delete-form]"]);
+  assert.equal(c.run("activeMember.id"), member.id);
+  assert.equal(c.storage.get("jcm-vip-session"), "saved-session");
+  assert.match(c.elements["[data-account-delete-status]"].textContent, /could not be confirmed/);
+});
+
+test("account deletion blocks duplicate requests and ignores late responses after a different login", async (t) => {
+  let release;
+  let count = 0;
+  const c = client(t, async (path) => {
+    if (path === "/api/profile") {
+      count += 1;
+      await new Promise((resolve) => { release = resolve; });
+      return new Response(JSON.stringify({ ok: true }));
+    }
+    return success(path);
+  }, { profile: true });
+  c.context.member = profileMember;
+  c.run('betaApiReady = true; applyMember(member, { announce: false }); pendingAccountDeletion = "pending"');
+  const form = c.elements["[data-account-delete-form]"];
+  const pending = submitAuth(form);
+  await submitAuth(form);
+  assert.equal(count, 1);
+  let canceled = false;
+  c.elements["[data-account-delete-dialog]"].listeners.cancel({ preventDefault() { canceled = true; } });
+  assert.equal(canceled, true);
+  c.run('resetMemberAuth(); applyMember({ ...member, id: "other-member" }, { announce: false }); storeMemberSession("other-session")');
+  release();
+  await pending;
+  assert.equal(c.run("activeMember.id"), "other-member");
+  assert.equal(c.storage.get("jcm-vip-session"), "other-session");
+});
 
 test("personal details populate, save only editable fields, and refresh the card, name, and help phone", async (t) => {
   const calls = [];
