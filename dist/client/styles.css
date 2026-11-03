@@ -1473,6 +1473,10 @@ p {
   margin: 14px 0;
 }
 
+.profile-settings {
+  margin-top: 24px;
+}
+
 .profile-settings h2 {
   margin-bottom: 10px;
   font-size: 1.16rem;
