@@ -199,3 +199,11 @@ Profile > Settings > Delete account permanently removes the sample account and r
 
 The regular service verifies members using random codes emailed to their own addresses. Real member support requests are delivered to the VIP desk. Push notifications are optional and can be enabled under Profile > Settings.
 ```
+
+## Event Expiration
+
+Published events automatically disappear from the member Events list and home Upcoming Event when their confirmed end time passes. Date-only events remain through the end of that calendar day in the event's time zone (America/New_York by default), including daylight-saving changes. The app also removes expired cached events while open and refreshes listings when returning from the background.
+
+Past events remain in the admin dashboard for reference, editing, or manual deletion. Rescheduling a past event to a future date makes it eligible to appear again. No database migration or scheduled cleanup job is required.
+
+For date-only events, use an explicit year, such as `Oct 30, 2026`, `10/30/2026`, or `2026-10-30`. Legacy labels without a year use the first matching date on or after the event's creation date, so they do not roll forward every year. Unrecognized dates, TBD dates, and yearless legacy records without a creation date stay visible until given a confirmed date or hidden manually.

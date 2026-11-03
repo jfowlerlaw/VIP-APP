@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDatabase } from "../database.mjs";
@@ -69,12 +69,13 @@ test("Supabase inbox uses literal member IDs for equality and quotes IDs only in
 });
 
 test("API publishes without APNs, authenticates inbox access, persists reads and edits events", async () => {
-  const server = await startTestServer();
+  const server = await startTestServer({ mockClock: true });
   const request = (path, { method = "GET", body, token, cookie } = {}) => fetch(server.origin + path, {
     method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   try {
+    await writeFile(join(server.directory, "clock-offset"), String(Date.parse("2026-11-01T21:00:00Z") - Date.now()));
     assert.equal((await request("/api/notifications")).status, 401);
     assert.equal((await request("/api/admin/push/broadcast", { method: "POST", body: {} })).status, 401);
     const admin = await request("/api/admin/login", { method: "POST", body: { password: "local-feature-test" } });

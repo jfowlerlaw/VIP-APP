@@ -106,6 +106,9 @@ let inboxLoaded = false;
 let inboxError = false;
 let pendingNotificationDeletion = null;
 let notificationDeletionInFlight = false;
+let cachedEvents = null;
+let eventsRequest = null;
+let eventExpiryTimer;
 
 function normalizeThemePreference(preference) {
   return preference === "dark" || preference === "light" || preference === "system" ? preference : "system";
@@ -880,30 +883,19 @@ function resetMemberAuth() {
 }
 
 function parseEventDate(event) {
+  if (event.sortAt && Number.isFinite(Date.parse(event.sortAt))) return new Date(event.sortAt);
   if (event.startsAt && Number.isFinite(Date.parse(event.startsAt))) return new Date(event.startsAt);
-  const dateLabel = String(event.dateLabel || "").trim();
-  const monthMatch = dateLabel.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})/i);
-  if (!monthMatch) return null;
-
-  const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-  const month = monthNames.indexOf(monthMatch[1].slice(0, 3).toLowerCase());
-  const day = Number(monthMatch[2]);
-  if (month < 0 || !Number.isFinite(day)) return null;
-
-  const now = new Date();
-  const eventDate = new Date(now.getFullYear(), month, day, 12);
-  if (eventDate < startOfToday(now)) {
-    eventDate.setFullYear(eventDate.getFullYear() + 1);
-  }
-  return eventDate;
+  return null;
 }
 
-function startOfToday(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function eventIsUpcoming(event) {
+  const expiresAt = Date.parse(event.expiresAt || event.endsAt);
+  return !Number.isFinite(expiresAt) || expiresAt > Date.now();
 }
 
 function getOrderedEvents(events) {
   return [...events]
+    .filter(eventIsUpcoming)
     .map((event, index) => ({
       event,
       index,
@@ -919,7 +911,7 @@ function getOrderedEvents(events) {
 }
 
 function getNextEvent(events) {
-  return getOrderedEvents(events).find((event) => !event.endsAt || Date.parse(event.endsAt) >= Date.now());
+  return getOrderedEvents(events)[0];
 }
 
 function genericEventMetaValue(value) {
@@ -1138,8 +1130,28 @@ markAllReadButton?.addEventListener("click", async () => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) loadInbox();
+  if (!document.hidden) {
+    loadInbox();
+    refreshEvents();
+  }
 });
+window.addEventListener("focus", refreshEvents);
+
+function refreshEvents() {
+  if (cachedEvents) renderEvents(cachedEvents);
+  if (betaApiReady) void loadEvents({ quiet: true });
+}
+
+function loadEvents({ quiet = false } = {}) {
+  if (eventsRequest) return eventsRequest;
+  eventsRequest = apiRequest("/api/events").then((result) => {
+    if (!Array.isArray(result.events)) throw new Error("Event listings could not be loaded.");
+    renderEvents(result.events);
+  }).catch(() => {
+    if (!quiet || !cachedEvents) renderEventsUnavailable();
+  }).finally(() => { eventsRequest = null; });
+  return eventsRequest;
+}
 
 function renderEventsUnavailable() {
   if (eventsList) {
@@ -1161,8 +1173,17 @@ function renderEventsUnavailable() {
 }
 
 function renderEvents(events) {
-  if (!eventsList || !Array.isArray(events)) return;
+  if (!Array.isArray(events)) return;
+  cachedEvents = events;
+  window.clearTimeout(eventExpiryTimer);
   const orderedEvents = getOrderedEvents(events);
+  const expirations = orderedEvents.map((event) => Date.parse(event.expiresAt || event.endsAt)).filter(Number.isFinite);
+  if (expirations.length) {
+    const delay = Math.min(2147483647, Math.max(1, Math.min(...expirations) - Date.now() + 10));
+    eventExpiryTimer = window.setTimeout(() => renderEvents(cachedEvents), delay);
+  }
+  updateNextInvite(orderedEvents);
+  if (!eventsList) return;
   eventsList.innerHTML = "";
 
   if (orderedEvents.length === 0) {
@@ -1278,7 +1299,6 @@ function renderEvents(events) {
     eventsList.append(article);
   });
 
-  updateNextInvite(orderedEvents);
   window.lucide?.createIcons();
 }
 
@@ -2014,7 +2034,7 @@ async function bootBetaApi() {
   }
 
   await Promise.all([
-    apiRequest("/api/events").then((events) => renderEvents(events.events)).catch(renderEventsUnavailable),
+    loadEvents(),
     apiRequest("/api/perks").then((perks) => renderPerks(perks.perks)).catch(renderPerksUnavailable),
   ]);
 }

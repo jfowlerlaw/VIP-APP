@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getEventSchedule } from "./event-calendar.mjs";
 
 export function createDatabase({ rootDir, seedDatabase }) {
   const dataDir = join(rootDir, "data");
@@ -188,24 +189,31 @@ export function createDatabase({ rootDir, seedDatabase }) {
   }
 
   async function listEvents({ visibleOnly = false } = {}) {
+    let events;
     if (!supabase) {
       const db = await readLocalDb();
-      return visibleOnly ? db.events.filter((event) => event.visible !== false) : db.events;
+      events = db.events;
+    } else {
+      const query = visibleOnly
+        ? queryString({ select: "*", visible: "eq.true", order: "created_at.desc" })
+        : queryString({ select: "*", order: "created_at.desc" });
+      const rows = await supabaseRequest("vip_events", { query });
+      events = rows.map(eventFromRow);
     }
-
-    const query = visibleOnly
-      ? queryString({ select: "*", visible: "eq.true", order: "created_at.desc" })
-      : queryString({ select: "*", order: "created_at.desc" });
-    const rows = await supabaseRequest("vip_events", { query });
-    return rows.map(eventFromRow);
+    if (!visibleOnly) return events;
+    const now = Date.now();
+    return events.filter((event) => event.visible !== false)
+      .map((event) => ({ ...event, ...getEventSchedule(event) }))
+      .filter((event) => !event.expiresAt || Date.parse(event.expiresAt) > now);
   }
 
   async function createEvent(event) {
     if (!supabase) {
       const db = await readLocalDb();
-      db.events.unshift(event);
+      const stored = { ...event, createdAt: new Date(Date.now()).toISOString() };
+      db.events.unshift(stored);
       await writeLocalDb(db);
-      return event;
+      return stored;
     }
 
     const rows = await supabaseRequest("vip_events", {
@@ -827,6 +835,7 @@ function eventFromRow(row) {
     endsAt: row.ends_at || null,
     timeZone: row.time_zone || "America/New_York",
     address: row.address || "",
+    createdAt: row.created_at || null,
   };
 }
 

@@ -16,6 +16,7 @@ function element() {
     setAttribute(name, value) { this.attributes[name] = value; if (name === "hidden") this.hidden = true; },
     removeAttribute(name) { delete this.attributes[name]; if (name === "hidden") this.hidden = false; },
     addEventListener(name, listener) { this.listeners[name] = listener; },
+    append(...children) { this.children.push(...children); },
     focus() { this.focused = true; },
   };
 }
@@ -36,12 +37,16 @@ function formElement(names) {
   return form;
 }
 
-function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false, profile = false } = {}) {
+function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false, profile = false, events = false } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
     "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
     "[data-notification-delete-dialog]", "[data-confirm-notification-delete]", "[data-cancel-notification-delete]",
     "[data-notification-delete-title]", "[data-notification-delete-error]", "[data-review-account]"].map((key) => [key, element()]));
+  if (events) {
+    for (const key of ["[data-events-list]", "[data-next-event-title]", "[data-next-event-meta]"]) elements[key] = element();
+    Object.defineProperty(elements["[data-events-list]"], "innerHTML", { set() { this.children = []; } });
+  }
   if (auth) {
     for (const key of ["[data-auth-title]", "[data-auth-description]", "[data-auth-toggle]", "[data-auth-switch]",
       "[data-auth-switch-prompt]", "[data-verify-label]", "[data-change-identity-label]", "[data-change-identity]",
@@ -122,6 +127,7 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
   const storage = new Map([["jcm-vip-session", "saved-session"]]);
   const timers = new Set();
   const listeners = {};
+  const documentListeners = {};
   const context = vm.createContext({
     AbortController, TypeError, URL, console,
     FormData: class { constructor(form) { this.values = form.values; } get(key) { return this.values[key]; } },
@@ -134,7 +140,9 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
         ".member-summary h2": profile ? [elements[".member-summary h2"]] : [],
         "[data-request-phone]": profile ? [fields["[data-request-phone]"]] : [],
         "[data-unread-count]": [elements["[data-unread-count]"]] })[selector] || [],
-      addEventListener() {},
+      createElement: element,
+      createTextNode: (textContent) => ({ textContent }),
+      addEventListener: (name, listener) => { documentListeners[name] = listener; },
     },
     window: {
       location: { protocol: native ? "capacitor:" : "http:" },
@@ -148,12 +156,80 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
   });
   t.after(() => timers.forEach(clearTimeout));
   vm.runInContext(source, context);
-  return { context, elements, storage, listeners, fields, form, run: (code) => vm.runInContext(code, context) };
+  return { context, elements, storage, listeners, documentListeners, fields, form, run: (code) => vm.runInContext(code, context) };
 }
 
 function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
+
+test("events expire from both the list and home card while the app stays open", (t) => {
+  const c = client(t, success, { events: true });
+  c.context.now = Date.parse("2026-11-01T22:00:00Z");
+  c.context.scheduled = [];
+  c.run("Date.now = () => now; window.setTimeout = (callback, delay) => scheduled.push({ callback, delay })");
+  c.context.events = [
+    { id: "later", title: "Later Event", sortAt: "2026-11-03T22:00:00Z", expiresAt: "2026-11-04T01:00:00Z" },
+    { id: "past", title: "Past Event", expiresAt: "2026-11-01T22:00:00Z" },
+    { id: "today", title: "Tonight", sortAt: "2026-11-01T23:00:00Z", expiresAt: "2026-11-02T01:00:00Z" },
+  ];
+  c.run("renderEvents(events)");
+  const list = c.elements["[data-events-list]"];
+  const next = c.elements["[data-next-event-title]"];
+  assert.equal(list.children.length, 2);
+  assert.equal(next.textContent, "Tonight");
+  assert.equal(list.children[0].children[0].children[1].textContent, "Tonight");
+  assert.equal(c.context.scheduled.at(-1).delay, 3 * 60 * 60 * 1000 + 10);
+  c.context.now = Date.parse("2026-11-02T01:00:01Z");
+  c.context.scheduled.at(-1).callback();
+  assert.equal(list.children.length, 1);
+  assert.equal(next.textContent, "Later Event");
+  c.context.now = Date.parse("2026-11-04T01:00:01Z");
+  c.context.scheduled.at(-1).callback();
+  assert.equal(list.children.length, 1);
+  assert.match(list.children[0].innerHTML, /No upcoming invites/);
+  assert.equal(next.textContent, "No upcoming invites");
+  assert.equal(c.run("parseEventDate({dateLabel: 'Oct 30, 2025'})"), null);
+});
+
+test("event expiration timers are bounded and TBD events do not schedule a timer", (t) => {
+  const c = client(t, success, { events: true });
+  c.context.scheduled = [];
+  c.run("window.setTimeout = (callback, delay) => scheduled.push({ callback, delay }); renderEvents([{title: 'TBD'}])");
+  assert.equal(c.context.scheduled.length, 0);
+  assert.equal(c.elements["[data-next-event-title]"].textContent, "TBD");
+  c.run("renderEvents([{title: 'Far future', expiresAt: '2099-01-01T00:00:00Z'}])");
+  assert.equal(c.context.scheduled[0].delay, 2147483647);
+});
+
+test("returning to the app removes expired cached events offline and refreshes after reconnecting", async (t) => {
+  let offline = true;
+  let requests = 0;
+  const c = client(t, async (path) => {
+    if (path !== "/api/events") return success(path);
+    requests++;
+    if (offline) throw new TypeError("Offline");
+    return new Response(JSON.stringify({ events: [{ title: "New Event", expiresAt: "2026-11-05T01:00:00Z" }] }));
+  }, { events: true });
+  c.context.now = Date.parse("2026-11-01T22:00:00Z");
+  c.run("Date.now = () => now; betaApiReady = true; renderEvents([{title: 'Ends soon', expiresAt: '2026-11-02T01:00:00Z'}, {title: 'Still upcoming', expiresAt: '2026-11-04T01:00:00Z'}])");
+  c.context.document.hidden = true;
+  c.documentListeners.visibilitychange();
+  assert.equal(requests, 0);
+  c.context.now = Date.parse("2026-11-02T05:00:00Z");
+  c.context.document.hidden = false;
+  c.documentListeners.visibilitychange();
+  c.listeners.focus();
+  await c.run("eventsRequest");
+  assert.equal(requests, 1);
+  assert.equal(c.elements["[data-next-event-title]"].textContent, "Still upcoming");
+  assert.equal(c.elements["[data-events-list]"].children.length, 1);
+  offline = false;
+  c.listeners.focus();
+  await c.run("eventsRequest");
+  assert.equal(requests, 2);
+  assert.equal(c.elements["[data-next-event-title]"].textContent, "New Event");
+});
 
 const submitAuth = (form) => form.listeners.submit({ currentTarget: form, preventDefault() {} });
 const profileMember = { ...member, firstName: "Avery", lastName: "Mitchell", cardName: member.name, phone: "4075550188",
