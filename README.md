@@ -163,3 +163,39 @@ Files:
 - `supabase/schema.sql` - Supabase/Postgres table schema
 - `PRODUCT_BRIEF.md` - MVP scope, admin needs, security notes, and build phases
 - `assets/just-call-moe-vip-card.png` - VIP card graphic used in the prototype
+
+## App Review Access
+
+The iOS target is iPhone-only in Debug and Release. Run `npm run cap:sync` before archiving the next build.
+
+In the Render service's Environment settings, set `VIP_REVIEW_CODE` to a new private six-digit code. Never commit the value or put it in the client app. Leave `NODE_ENV=production` and `VIP_SHOW_CODES=false`; the review code is independent of the development-code settings. Removing `VIP_REVIEW_CODE` disables reviewer sign-in and existing reviewer sessions. No database migration is needed.
+
+Reviewer credentials:
+
+- Email: `reviewer@moevip.example`
+- Last name: `Review`
+- Verification code: the private value of `VIP_REVIEW_CODE` from Render
+
+This creates a marked sample VIP record with fictional details and its own inbox message. It has ordinary member permissions: it can see its own account and shared published content, not other members' records or admin data. It uses the real profile, inbox, support-request storage, push-registration, and deletion flows. Verification and support emails from this account are not sent. Email edits are restricted to addresses ending in `.example`, and both email-confirmation fields accept the private review code. Normal member authentication and email delivery are unchanged.
+
+Deleting the sample account removes that record and its related app data. A subsequent sign-in using the reserved reviewer credentials provisions a new sample record with a new ID. Ordinary members are never automatically recreated after deletion.
+
+In App Store Connect > App Review Information, enter the reserved email as the sign-in username. This app has no password field. If App Store Connect requires a password value, enter the same review code there and explain in Notes that it is entered as a verification code, not an app password. Put the private code and the following instructions in Notes, replacing the code placeholder before submission:
+
+```text
+Moe VIP uses email and last-name verification rather than passwords.
+
+Email: reviewer@moevip.example
+Last name: Review
+Verification code: [private VIP_REVIEW_CODE from Render]
+
+Enter the email and last name, tap Email Verification Code, then enter the code above. No access to an email inbox is required for this dedicated sample account. This account cannot access other VIP members' personal data or the admin dashboard.
+
+The account is labeled App Review - Sample account. It uses the same member interface and account features as the live VIP service. Profile edits, inbox reads/deletions, help submissions, push registration, and account deletion use the normal app flows. The only email-delivery difference is that verification and support messages from the sample account are not emailed; support submissions are saved and clearly labeled as sample requests.
+
+Use the same verification code above for account-deletion confirmation and in BOTH fields when confirming an email change. For an email-change test, use updated@moevip.example. For a help-form test, you may enter 4075550100 as the callback phone number.
+
+Profile > Settings > Delete account permanently removes the sample account and related app records. Signing in again with the reserved email and last name creates a fresh sample account for further review. Other VIP members do not have this automatic recreation behavior.
+
+The regular service verifies members using random codes emailed to their own addresses. Real member support requests are delivered to the VIP desk. Push notifications are optional and can be enabled under Profile > Settings.
+```

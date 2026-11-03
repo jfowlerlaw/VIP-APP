@@ -516,6 +516,20 @@ img {
   border-top: 1px solid var(--line);
 }
 
+.review-account-note {
+  margin: 10px 0 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.review-account-note[hidden] {
+  display: none;
+}
+
 .delete-account-link {
   display: inline-flex;
   align-items: center;

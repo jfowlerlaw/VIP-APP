@@ -23,6 +23,10 @@ const emailChangeSendLimits = new Map();
 const pendingEmailChanges = new Map();
 const accountDeletionSendLimits = new Map();
 const pendingAccountDeletions = new Map();
+const reviewSignInLimits = new Map();
+const reviewEmail = "reviewer@moevip.example";
+const reviewCode = String(process.env.VIP_REVIEW_CODE || "").trim();
+if (reviewCode && !/^\d{6}$/.test(reviewCode)) throw new Error("VIP_REVIEW_CODE must be a private six-digit code, or empty to disable App Review access.");
 let memberWriteQueue = Promise.resolve();
 const mailingFieldNames = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"];
 const claimDurationMs = 1000 * 60 * 15;
@@ -355,8 +359,22 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req);
     const identity = String(body.identity || "");
     const lastName = String(body.lastName || "");
-    const db = await vipDb.readDb();
-    const member = findMemberForClaim(db.members, identity, lastName);
+    const reviewLogin = identity.trim().toLowerCase() === reviewEmail;
+    let member;
+    if (reviewLogin) {
+      if (reviewCode && lastName.trim().toLowerCase() === "review") {
+        const retryAfter = reserveVerificationEmail(reviewSignInLimits, [["all", 30]]);
+        if (retryAfter) {
+          res.setHeader("Retry-After", String(retryAfter));
+          sendJson(res, 429, { message: "Too many App Review sign-in requests. Please wait 15 minutes before trying again." });
+          return;
+        }
+        member = await ensureReviewMember();
+      }
+    } else {
+      const db = await vipDb.readDb();
+      member = findMemberForClaim(db.members, identity, lastName);
+    }
 
     if (!member) {
       sendJson(res, 404, {
@@ -367,14 +385,15 @@ async function handleApi(req, res, url) {
 
     removeExpiredClaims();
     const claimToken = token();
-    const code = verificationCode();
+    const code = verificationCodeForMember(member);
     pendingClaims.set(claimToken, {
       code,
       memberId: member.id,
+      reviewAccount: isReviewMember(member),
       expiresAt: Date.now() + claimDurationMs,
     });
 
-    if (showDevCodes()) {
+    if (showDevCodes() && !reviewLogin) {
       console.log(`[vip beta] Verification code for ${member.name}: ${code}`);
     }
     const email = await sendVerificationEmail({ member, code });
@@ -382,7 +401,8 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       claimToken,
       destination: maskDestination(member, identity),
-      devCode: showDevCodes() ? code : undefined,
+      devCode: showDevCodes() && !reviewLogin ? code : undefined,
+      reviewAccount: reviewLogin || undefined,
       email,
     });
     return;
@@ -393,6 +413,10 @@ async function handleApi(req, res, url) {
     const signup = normalizeSignup(body);
     if (!signup) {
       sendJson(res, 400, { message: "Enter your name, a valid email, and your full mailing address: street, city, state/province, ZIP/postal code, and country. Check the ZIP/postal code and any optional phone number." });
+      return;
+    }
+    if (signup.email === reviewEmail) {
+      sendJson(res, 409, { message: "That address is reserved for the App Review sample account." });
       return;
     }
     if (signupConflicts(await vipDb.listMembers(), signup)) {
@@ -434,7 +458,7 @@ async function handleApi(req, res, url) {
     const claim = pendingClaims.get(claimToken);
     const code = String(body.code || "").trim();
 
-    if (!claim || claim.expiresAt < Date.now()) {
+    if (!claim || claim.expiresAt < Date.now() || (claim.reviewAccount && (!reviewCode || !safeEqual(claim.code, reviewCode)))) {
       pendingClaims.delete(claimToken);
       sendJson(res, 400, { message: "That code expired or is no longer valid. Request a new one." });
       return;
@@ -471,10 +495,10 @@ async function handleApi(req, res, url) {
           sendJson(res, 404, { message: "Member record is unavailable. Please contact vip@justcallmoe.com." });
           return;
         }
-        updatedMember = await vipDb.updateMember(member.id, {
+        updatedMember = await withMemberWrite(() => vipDb.updateMember(member.id, {
           claimedAt: new Date().toISOString(),
           status: memberStatusAfterClaim(member.status),
-        });
+        }));
         if (!updatedMember) {
           sendJson(res, 404, { message: "Member record not found." });
           return;
@@ -503,7 +527,7 @@ async function handleApi(req, res, url) {
 
     const db = await vipDb.readDb();
     const member = findMemberByEmail(db.members, email);
-    if (!member || member.status === "Paused") {
+    if (!member || member.status === "Paused" || isReviewMember(member)) {
       sendJson(res, 401, { message: failedLoginMessage });
       return;
     }
@@ -568,6 +592,12 @@ async function handleApi(req, res, url) {
         sendJson(res, 400, { message: "Enter a valid new email address, different from your current one." });
         return;
       }
+      if ((isReviewMember(member) && !email.endsWith(".example")) || (!isReviewMember(member) && email === reviewEmail)) {
+        sendJson(res, 400, { message: isReviewMember(member)
+          ? "Use an address ending in .example for the App Review sample account. No real email will be sent."
+          : "That email is reserved for App Review. Choose a different email address." });
+        return;
+      }
       if ((await vipDb.listMembers()).some((other) => other.id !== member.id && other.email.trim().toLowerCase() === email)) {
         sendJson(res, 409, { message: "That email is already connected to another VIP account." });
         return;
@@ -585,25 +615,26 @@ async function handleApi(req, res, url) {
       for (const [id, pending] of pendingEmailChanges) {
         if (pending.expiresAt < Date.now() && !pending.verifying) pendingEmailChanges.delete(id);
       }
-      const pending = { token: token(), email, currentEmail: member.email, code: verificationCode(), expiresAt: Date.now() + claimDurationMs, attempts: 0 };
-      pending.currentCode = verificationCode();
-      while (!showDevCodes() && pending.currentCode === pending.code) pending.currentCode = verificationCode();
+      const pending = { token: token(), email, currentEmail: member.email, code: verificationCodeForMember(member), expiresAt: Date.now() + claimDurationMs, attempts: 0 };
+      pending.currentCode = verificationCodeForMember(member);
+      while (!showDevCodes() && !isReviewMember(member) && pending.currentCode === pending.code) pending.currentCode = verificationCode();
       pendingEmailChanges.set(member.id, pending);
       const currentEmailResult = await sendVerificationEmail({ member, code: pending.currentCode, purpose: "email-change-current", proposedEmail: email });
-      const emailResult = currentEmailResult.status === "sent" || showDevCodes()
+      const emailResult = ["sent", "review"].includes(currentEmailResult.status) || showDevCodes()
         ? await sendVerificationEmail({ member: { ...member, email }, code: pending.code, purpose: "email-change" })
         : currentEmailResult;
       if (pendingEmailChanges.get(member.id) !== pending) {
         sendJson(res, 409, { message: "Another email-change request was started. Use the latest code." });
         return;
       }
-      if ((emailResult.status !== "sent" || currentEmailResult.status !== "sent") && !showDevCodes()) {
+      if ((!mailReady(emailResult) || !mailReady(currentEmailResult)) && !showDevCodes()) {
         pendingEmailChanges.delete(member.id);
         sendJson(res, 502, { message: "The verification email could not be sent. Your current email has not changed. Please try again later." });
         return;
       }
       sendJson(res, 200, { changeToken: pending.token, destination: maskDestination({ email }, email), currentDestination: maskDestination(member, member.email),
-        devCode: showDevCodes() ? pending.code : undefined, devCurrentCode: showDevCodes() ? pending.currentCode : undefined });
+        devCode: showDevCodes() && !isReviewMember(member) ? pending.code : undefined, devCurrentCode: showDevCodes() && !isReviewMember(member) ? pending.currentCode : undefined,
+        reviewAccount: isReviewMember(member) || undefined });
       return;
     }
     const pending = pendingEmailChanges.get(member.id);
@@ -690,19 +721,20 @@ async function handleApi(req, res, url) {
       for (const [id, pending] of pendingAccountDeletions) {
         if (pending.expiresAt < Date.now() && !pending.deleting) pendingAccountDeletions.delete(id);
       }
-      const pending = { token: token(), email: member.email, code: verificationCode(), expiresAt: Date.now() + claimDurationMs, attempts: 0 };
+      const pending = { token: token(), email: member.email, code: verificationCodeForMember(member), expiresAt: Date.now() + claimDurationMs, attempts: 0 };
       pendingAccountDeletions.set(member.id, pending);
       const email = await sendVerificationEmail({ member, code: pending.code, purpose: "account-deletion" });
       if (pendingAccountDeletions.get(member.id) !== pending) {
         sendJson(res, 409, { message: "Your account or deletion request changed. Request a new code." });
         return;
       }
-      if (email.status !== "sent" && !showDevCodes()) {
+      if (!mailReady(email) && !showDevCodes()) {
         pendingAccountDeletions.delete(member.id);
         sendJson(res, 502, { message: "The deletion code could not be sent. Your account has not been deleted. Please try again later." });
         return;
       }
-      sendJson(res, 200, { deleteToken: pending.token, destination: maskDestination(member, member.email), devCode: showDevCodes() ? pending.code : undefined });
+      sendJson(res, 200, { deleteToken: pending.token, destination: maskDestination(member, member.email),
+        devCode: showDevCodes() && !isReviewMember(member) ? pending.code : undefined, reviewAccount: isReviewMember(member) || undefined });
       return;
     }
     const pending = pendingAccountDeletions.get(member.id);
@@ -905,7 +937,7 @@ async function handleApi(req, res, url) {
     if (email.error) request.emailError = email.error;
 
     await vipDb.createRequest(request);
-    if (email.status !== "sent") {
+    if (!mailReady(email)) {
       sendJson(res, 502, {
         message:
           "The VIP desk email could not be sent. Please call 833-MOE-WINS or email vip@justcallmoe.com.",
@@ -1761,6 +1793,7 @@ function appendFeedbackDetails(message, appInfo) {
 }
 
 async function sendConciergeEmail({ member, request }) {
+  if (isReviewMember(member)) return { status: "review" };
   const memberEmail = member.email || "";
   const memberPhone = member.phone || "";
   const callbackPhone = request.phone || "";
@@ -1808,6 +1841,7 @@ async function sendConciergeEmail({ member, request }) {
 }
 
 async function sendVerificationEmail({ member, code, purpose = "signin", proposedEmail = "" }) {
+  if (isReviewMember(member)) return { status: "review" };
   const memberEmail = member.email || "";
 
   if (!memberEmail.includes("@")) {
@@ -1857,6 +1891,7 @@ async function sendVerificationEmail({ member, code, purpose = "signin", propose
 }
 
 async function sendEmailChangeNotice(member, newEmail) {
+  if (isReviewMember(member)) return;
   const result = await sendEmail({
     personalizations: [{ to: [{ email: member.email, name: member.name }], subject: "Your Moe VIP email address was changed" }],
     content: [{ type: "text/plain", value: `Your Moe VIP account email was changed to ${newEmail}.\n\nIf you did not make this change, contact vip@justcallmoe.com immediately.\n\nJust Call Moe VIP Team` }],
@@ -2129,6 +2164,7 @@ function publicMember(member) {
     hasPassword: Boolean(member.passwordHash),
     passwordSetAt: member.passwordSetAt || null,
     preferences: member.preferences || {},
+    isReviewAccount: isReviewMember(member),
   };
 }
 
@@ -2313,7 +2349,7 @@ function reserveVerificationEmail(store, limits) {
 }
 
 async function withMemberWrite(write) {
-  // Keep local identity checks and writes together; Supabase also enforces unique contacts.
+  // Keep local account/session writes in order; Supabase also enforces unique contacts.
   const previous = memberWriteQueue;
   let release;
   memberWriteQueue = new Promise((resolve) => { release = resolve; });
@@ -2355,7 +2391,7 @@ function findMemberForClaim(members, identity, lastName) {
   const cleanLastName = String(lastName || "").trim().toLowerCase();
 
   return members.find((member) => {
-    if (isPausedStatus(member.status)) return false;
+    if (isPausedStatus(member.status) || isReviewMember(member)) return false;
 
     const memberLastName = String(member.lastName || lastNameFromName(member.name)).toLowerCase();
     const emailMatches = member.email.toLowerCase() === cleanIdentity;
@@ -2407,7 +2443,7 @@ async function requireMember(req) {
 
   const transientSession = memberSessions.get(sessionToken);
   if (transientSession?.expiresAt && transientSession.expiresAt > Date.now()) {
-    return vipDb.getMemberById(transientSession.memberId);
+    return getSessionMember(transientSession.memberId);
   }
 
   try {
@@ -2423,12 +2459,48 @@ async function requireMember(req) {
       expiresAt,
     });
 
-    return vipDb.getMemberById(session.memberId);
+    return getSessionMember(session.memberId);
   } catch (error) {
     console.warn("Member session lookup failed.", error);
     if (!transientSession || transientSession.expiresAt < Date.now()) return null;
-    return vipDb.getMemberById(transientSession.memberId);
+    return getSessionMember(transientSession.memberId);
   }
+}
+
+async function getSessionMember(memberId) {
+  const member = await vipDb.getMemberById(memberId);
+  return isReviewMember(member) && !reviewCode ? null : member;
+}
+
+function isReviewMember(member) {
+  return Boolean(member?.id?.startsWith("review_") && member.preferences?.appReview === true);
+}
+
+function verificationCodeForMember(member) {
+  return isReviewMember(member) ? reviewCode : verificationCode();
+}
+
+function mailReady(result) {
+  return ["sent", "review"].includes(result.status);
+}
+
+async function ensureReviewMember() {
+  return withMemberWrite(async () => {
+    const members = await vipDb.listMembers();
+    const existing = members.filter(isReviewMember);
+    if (existing.length > 1) throw new Error("More than one App Review sample account exists. Remove the duplicate before continuing.");
+    if (existing[0]) return existing[0];
+    if (findMemberByEmail(members, reviewEmail)) throw new Error("The reserved App Review email is already assigned to another record.");
+    const member = await vipDb.createMember({
+      id: `review_${randomUUID()}`, firstName: "Apple", lastName: "Review", name: "Apple Review", cardName: "Apple Review",
+      email: reviewEmail, phone: "", addressLine1: "123 Example Street", addressLine2: "", city: "Orlando", state: "FL",
+      postalCode: "32801", country: "United States", memberId: "APP-REVIEW", joined: String(new Date().getUTCFullYear()),
+      status: "Active", claimedAt: null, preferences: { appReview: true, smsAlerts: false, emailUpdates: false, walletUpdates: false },
+    });
+    await vipDb.createNotification({ id: `notice_${randomUUID()}`, memberId: member.id, title: "Welcome to Moe VIP",
+      body: "This sample message belongs to your App Review account.", actionView: "none", createdAt: new Date().toISOString() });
+    return member;
+  });
 }
 
 function memberSessionTokenFromRequest(req) {
@@ -2450,12 +2522,12 @@ async function createMemberSession(req, res, memberId) {
   });
 
   try {
-    await vipDb.createMemberSession({
+    await withMemberWrite(() => vipDb.createMemberSession({
       token: sessionToken,
       memberId,
       expiresAt: expiresAtDate.toISOString(),
       createdAt,
-    });
+    }));
   } catch (error) {
     console.warn("Member session could not be persisted.", error);
   }
@@ -2471,7 +2543,7 @@ async function createMemberSession(req, res, memberId) {
 async function forgetMemberSession(sessionToken) {
   memberSessions.delete(sessionToken);
   try {
-    await vipDb.deleteMemberSession(sessionToken);
+    await withMemberWrite(() => vipDb.deleteMemberSession(sessionToken));
   } catch (error) {
     console.warn("Member session could not be deleted.", error);
   }
@@ -2487,7 +2559,7 @@ async function removeMemberSessions(memberId) {
   }
 
   try {
-    await vipDb.deleteMemberSessionsByMember(memberId);
+    await withMemberWrite(() => vipDb.deleteMemberSessionsByMember(memberId));
   } catch (error) {
     console.warn("Member sessions could not be deleted.", error);
   }

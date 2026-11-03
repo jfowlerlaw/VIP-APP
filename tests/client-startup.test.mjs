@@ -41,7 +41,7 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
     "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
     "[data-notification-delete-dialog]", "[data-confirm-notification-delete]", "[data-cancel-notification-delete]",
-    "[data-notification-delete-title]", "[data-notification-delete-error]"].map((key) => [key, element()]));
+    "[data-notification-delete-title]", "[data-notification-delete-error]", "[data-review-account]"].map((key) => [key, element()]));
   if (auth) {
     for (const key of ["[data-auth-title]", "[data-auth-description]", "[data-auth-toggle]", "[data-auth-switch]",
       "[data-auth-switch-prompt]", "[data-verify-label]", "[data-change-identity-label]", "[data-change-identity]",
@@ -158,6 +158,57 @@ function success(path) {
 const submitAuth = (form) => form.listeners.submit({ currentTarget: form, preventDefault() {} });
 const profileMember = { ...member, firstName: "Avery", lastName: "Mitchell", cardName: member.name, phone: "4075550188",
   addressLine1: "123 Example Street", addressLine2: "Apt 4B", city: "Orlando", state: "FL", postalCode: "32801", country: "United States" };
+
+test("review sign-in uses the existing code form with clear sample-account labeling, without claiming an email was sent", async (t) => {
+  const review = { ...profileMember, id: "review_sample", name: "Apple Review", isReviewAccount: true };
+  const c = client(t, async (path) => {
+    if (path === "/api/claim/start") return new Response(JSON.stringify({ claimToken: "review-claim", reviewAccount: true, email: { status: "review" } }));
+    if (path === "/api/claim/verify") return new Response(JSON.stringify({ member: review, sessionToken: "review-session" }));
+    return success(path);
+  }, { auth: true });
+  c.run("betaApiReady = true");
+  const form = c.elements["[data-claim-form]"];
+  form.values = { identity: "reviewer@moevip.example", lastName: "Review" };
+  await submitAuth(form);
+  assert.equal(c.elements["[data-code-form]"].hidden, false);
+  assert.match(c.elements["[data-code-message]"].textContent, /review notes/);
+  assert.match(c.elements["[data-code-message]"].textContent, /No email is sent/);
+  c.elements["[data-code-form]"].values.code = "836291";
+  await submitAuth(c.elements["[data-code-form]"]);
+  assert.equal(c.elements["[data-review-account]"].hidden, false);
+  assert.equal(c.storage.get("jcm-vip-session"), "review-session");
+  c.run("resetMemberAuth()");
+  assert.equal(c.elements["[data-review-account]"].hidden, true);
+});
+
+test("review help requests are saved without a false email-delivery confirmation", async (t) => {
+  const c = client(t, async (path) => path === "/api/requests"
+    ? new Response(JSON.stringify({ email: { status: "review" } })) : success(path));
+  c.context.member = { ...member, isReviewAccount: true };
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  c.fields.select.value = "Other";
+  c.fields.textarea.value = "Sample request";
+  c.fields["[data-request-phone]"].value = "4075550100";
+  await c.form.listeners.submit({ preventDefault() {} });
+  assert.match(c.fields["[data-request-status]"].textContent, /No email was sent/);
+  assert.equal(c.fields.textarea.value, "");
+});
+
+test("review email changes and deletion prompts refer to the review code, never an outgoing email", async (t) => {
+  const c = client(t, async (path) => {
+    if (path === "/api/profile/email/start") return new Response(JSON.stringify({ changeToken: "review-change", reviewAccount: true }));
+    if (path === "/api/profile/delete/start") return new Response(JSON.stringify({ deleteToken: "review-delete", reviewAccount: true }));
+    return success(path);
+  }, { profile: true });
+  c.context.member = { ...profileMember, isReviewAccount: true };
+  c.run("betaApiReady = true; applyMember(member, { announce: false })");
+  c.elements["[data-email-change-form]"].values.email = "changed@moevip.example";
+  await submitAuth(c.elements["[data-email-change-form]"]);
+  assert.match(c.elements["[data-email-change-status]"].textContent, /review notes in both fields/);
+  await c.elements["[data-start-account-delete]"].listeners.click();
+  assert.match(c.elements["[data-account-delete-status]"].textContent, /code from the review notes/);
+  assert.match(c.elements["[data-account-delete-status]"].textContent, /No email was sent/);
+});
 
 test("account deletion opens a confirmation, supports resends, and clears sign-in and push data only after confirmed success", async (t) => {
   const calls = [];

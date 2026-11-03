@@ -806,6 +806,8 @@ function applyMember(member, options = {}) {
   });
   const currentEmail = document.querySelector("[data-current-email]");
   if (currentEmail) currentEmail.textContent = member.email || "";
+  const reviewNote = document.querySelector("[data-review-account]");
+  if (reviewNote) reviewNote.hidden = !member.isReviewAccount;
 
   appScreen?.classList.add("is-authenticated");
   document.querySelector("[data-auth-screen]")?.setAttribute("hidden", "");
@@ -830,6 +832,8 @@ function resetMemberAuth() {
   resetEmailChange();
   resetAccountDeletion();
   activeMember = null;
+  const reviewNote = document.querySelector("[data-review-account]");
+  if (reviewNote) reviewNote.hidden = true;
   pendingMember = null;
   pendingClaim = null;
   clearStoredMemberSession();
@@ -1516,7 +1520,7 @@ async function requestAuthCode(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
-    if (!result.claimToken || !(result.devCode || result.email?.status === "sent")) {
+    if (!result.claimToken || !(result.devCode || result.email?.status === "sent" || (result.reviewAccount && result.email?.status === "review"))) {
       if (message) message.textContent = "The verification email could not be sent. Please email vip@justcallmoe.com for help.";
       return;
     }
@@ -1525,7 +1529,9 @@ async function requestAuthCode(event) {
     if (codeForm) codeForm.hidden = false;
     const authSwitch = document.querySelector("[data-auth-switch]");
     if (authSwitch) authSwitch.hidden = true;
-    if (codeMessage) codeMessage.textContent = `Code sent to ${result.destination}. It expires in 15 minutes.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`;
+    if (codeMessage) codeMessage.textContent = result.reviewAccount
+      ? "App Review: enter the six-digit code provided in App Store Connect review notes. No email is sent for this sample account."
+      : `Code sent to ${result.destination}. It expires in 15 minutes.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`;
   } catch (error) {
     if (message) message.textContent = error.message || "We couldn't send your code. Please try again.";
   } finally {
@@ -1637,7 +1643,7 @@ conciergeForms.forEach((form) => {
             ...(type === feedbackRequestType ? { appInfo: getAppInfo() } : {}) }),
         });
 
-        if (result.email?.status !== "sent") {
+        if (result.email?.status !== "sent" && !(activeMember?.isReviewAccount && result.email?.status === "review")) {
           throw new Error(
             "The VIP desk email could not be sent. Please call 833-MOE-WINS or email vip@justcallmoe.com."
           );
@@ -1663,8 +1669,8 @@ conciergeForms.forEach((form) => {
       return;
     }
 
-    setStatus("Sent to the VIP desk. The team will follow up shortly.");
-    showToast("Request emailed to the VIP desk.");
+    setStatus(activeMember?.isReviewAccount ? "Request saved for the App Review sample account. No email was sent." : "Sent to the VIP desk. The team will follow up shortly.");
+    showToast(activeMember?.isReviewAccount ? "Sample request saved." : "Request emailed to the VIP desk.");
     form.reset();
     if (feedbackDetails) feedbackDetails.hidden = true;
   });
@@ -1806,7 +1812,9 @@ async function requestEmailChangeCode(event) {
       emailVerifyForm.reset();
       emailVerifyForm.hidden = false;
     }
-    setAccountStatus(emailChangeStatus, `Codes sent to ${result.currentDestination || activeMember.email} and ${result.destination}. Your email will change after both codes are confirmed. Codes expire in 15 minutes.${result.devCode ? ` Test codes: current ${result.devCurrentCode}, new ${result.devCode}.` : ""}`);
+    setAccountStatus(emailChangeStatus, result.reviewAccount
+      ? "App Review: use the code from the review notes in both fields. No emails are sent for this sample account."
+      : `Codes sent to ${result.currentDestination || activeMember.email} and ${result.destination}. Your email will change after both codes are confirmed. Codes expire in 15 minutes.${result.devCode ? ` Test codes: current ${result.devCurrentCode}, new ${result.devCode}.` : ""}`);
   } catch (error) {
     if (accountRequestCurrent(epoch, memberId)) {
       if (error.status === 502) {
@@ -1904,7 +1912,9 @@ async function requestAccountDeletionCode() {
       accountDeleteForm.reset();
       accountDeleteForm.hidden = false;
     }
-    setAccountStatus(accountDeleteStatus, `Code sent to ${result.destination}. It expires in 15 minutes. Your account will only be deleted after you confirm below.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`);
+    setAccountStatus(accountDeleteStatus, result.reviewAccount
+      ? "App Review: enter the code from the review notes to permanently delete this sample account. No email was sent."
+      : `Code sent to ${result.destination}. It expires in 15 minutes. Your account will only be deleted after you confirm below.${result.devCode ? ` Test code: ${result.devCode}.` : ""}`);
   } catch (error) {
     if (accountRequestCurrent(epoch, memberId)) {
       if (error.status === 502) {

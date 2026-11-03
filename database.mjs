@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -659,7 +660,13 @@ export function createDatabase({ rootDir, seedDatabase }) {
 
   async function writeLocalDb(db) {
     await mkdir(dataDir, { recursive: true });
-    await writeFile(dbPath, `${JSON.stringify(db, null, 2)}\n`);
+    const temporaryPath = `${dbPath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporaryPath, `${JSON.stringify(db, null, 2)}\n`);
+      await rename(temporaryPath, dbPath);
+    } finally {
+      await rm(temporaryPath, { force: true });
+    }
   }
 
   async function supabaseRequest(table, { method = "GET", query = "", body, headers = {} } = {}) {
