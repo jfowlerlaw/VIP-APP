@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": { "node": "24.x" },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build-sites.mjs",
@@ -14,6 +15,8 @@
   "dependencies": {
     "@capacitor/core": "^8.4.2",
     "@capacitor/ios": "^8.4.2",
+    "cheerio": "^1.2.0",
+    "ipaddr.js": "^2.5.0",
     "vip-push-notifications": "file:plugins/vip-push-notifications"
   },
   "devDependencies": {

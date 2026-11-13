@@ -22,6 +22,7 @@
     </script>
     <link rel="stylesheet" href="admin.css">
     <script defer src="assets/lucide.min.js"></script>
+    <script defer src="admin-event-import.js"></script>
     <script defer src="admin.js"></script>
   </head>
   <body>
@@ -370,18 +371,22 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
               </div>
               <form class="stack-form" data-event-form>
                 <input type="hidden" name="eventId">
-                <label>
-                  Event name
-                  <input name="eventName" required maxlength="150">
-                </label>
-                <label>
-                  Event URL
-                  <input name="eventUrl" type="url" placeholder="https://">
-                </label>
+                <div class="event-link-field">
+                  <label for="event-url">Event URL</label>
+                  <div class="event-link-input">
+                    <input id="event-url" name="eventUrl" type="url" placeholder="https://" aria-describedby="event-import-status">
+                    <button class="icon-button" type="button" data-import-event title="Import event details" aria-label="Import event details">
+                      <i data-lucide="download" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+                <p class="fine-print neutral event-import-status" id="event-import-status" data-event-import-status role="status"></p>
+                <label>Event name<input name="eventName" required maxlength="150"></label>
                 <label>
                   Photo URL
                   <input name="image" type="url" placeholder="https://">
                 </label>
+                <img class="event-image-preview" data-event-image-preview alt="Event graphic preview" referrerpolicy="no-referrer" hidden>
                 <div class="two-col">
                   <label>
                     <span data-event-start-label>Start (your local time)</span>

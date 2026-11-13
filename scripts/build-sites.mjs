@@ -11,7 +11,7 @@ await rm(distDir, { force: true, recursive: true });
 await mkdir(clientDir, { recursive: true });
 await mkdir(serverDir, { recursive: true });
 
-for (const file of ["index.html", "admin.html", "styles.css", "admin.css", "app.js", "admin.js"]) {
+for (const file of ["index.html", "admin.html", "styles.css", "admin.css", "app.js", "admin.js", "admin-event-import.js"]) {
   await cp(join(rootDir, file), join(clientDir, file));
 }
 

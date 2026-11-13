@@ -5,9 +5,10 @@ This folder contains a mobile-first Just Call Moe VIP client portal and an admin
 ## Local Beta Test
 
 1. Copy `.env.example` to `.env` and change `VIP_ADMIN_PASSWORD`.
-2. Start the beta server:
+2. Install dependencies and start the beta server (Node.js 24):
 
 ```sh
+npm ci
 node server.mjs
 ```
 
@@ -154,7 +155,7 @@ Files:
 - `index.html` - clickable mobile portal mockup
 - `styles.css` - responsive visual styling
 - `app.js` - member app navigation and prototype interactions
-- `server.mjs` - dependency-free local beta server and API
+- `server.mjs` - local beta server and API
 - `database.mjs` - local JSON/Supabase database adapter
 - `admin.html` - admin dashboard prototype
 - `admin.css` - admin dashboard styling
@@ -207,3 +208,13 @@ Published events automatically disappear from the member Events list and home Up
 Past events remain in the admin dashboard for reference, editing, or manual deletion. Rescheduling a past event to a future date makes it eligible to appear again. No database migration or scheduled cleanup job is required.
 
 For date-only events, use an explicit year, such as `Oct 30, 2026`, `10/30/2026`, or `2026-10-30`. Legacy labels without a year use the first matching date on or after the event's creation date, so they do not roll forward every year. Unrecognized dates, TBD dates, and yearless legacy records without a creation date stay visible until given a confirmed date or hidden manually.
+
+## Event Link Import
+
+In Admin > Events > New Event, paste the event page into Event URL. The importer reads public Schema.org Event JSON-LD or microdata, with Open Graph/Twitter metadata as a fallback, and fills the available title, copy, image, date, venue, city, and address. An image preview appears beneath Photo URL. The download icon retries an import. Imported fields remain editable; existing drafts and manual edits are preserved. Changing the link clears only untouched auto-filled fields from the prior link. Nothing is published until Publish Event is selected.
+
+Exact start/end times are imported only when the page includes both timestamps with explicit UTC offsets and the end follows the start. Otherwise, a confirmed calendar date is imported when available and the admin is asked to confirm times. Publication dates are never used as event dates. Pages requiring JavaScript, a login, or bot verification may need manual entry; Funny Bone blocked the automated test request. External images remain hosted at their original URLs and may stop working if the source removes them or blocks embedding.
+
+Import requests require an admin session. Fetches accept only public HTTP(S) destinations, validate DNS and each redirect, pin approved DNS results to sockets, and bound response size and duration. Page scripts are not executed and cookies are not forwarded. The imported graphic URL is also checked for a public destination before being returned.
+
+No SQL migration or new iPhone build is needed for this admin-only feature. Render must install dependencies before starting the server. The Blueprint uses `npm ci --omit=dev && node --check server.mjs`; use that Build Command for manually configured services too.

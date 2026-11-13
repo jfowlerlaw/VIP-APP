@@ -1123,9 +1123,12 @@ document.querySelector("[data-perk-reset]")?.addEventListener("click", () => {
   resetPerkForm();
 });
 
+const eventLinkImporter = new EventLinkImporter(document.querySelector("[data-event-form]"), apiRequest, () => adminApiReady);
+
 document.querySelector("[data-event-form]")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  if (eventLinkImporter.busy) return;
   const data = new FormData(form);
   const name = String(data.get("eventName") || "").trim();
   const url = String(data.get("eventUrl") || "").trim();
@@ -1153,6 +1156,8 @@ document.querySelector("[data-event-form]")?.addEventListener("submit", async (e
   }
   const button = form.querySelector("button[type='submit']");
   const id = String(data.get("eventId") || "");
+  eventLinkImporter.reset();
+  eventLinkImporter.setSaving(true);
   button.disabled = true;
   resultMessage.textContent = "Saving event...";
   try {
@@ -1175,18 +1180,20 @@ document.querySelector("[data-event-form]")?.addEventListener("submit", async (e
   } catch (error) {
     resultMessage.textContent = error.message || "Event could not be saved.";
   } finally {
+    eventLinkImporter.setSaving(false);
     button.disabled = false;
   }
 });
 
 document.querySelector("[data-add-event]")?.addEventListener("click", () => {
   resetEventForm();
-  document.querySelector("[data-event-form] input[name='eventName']")?.focus();
+  document.querySelector("[data-event-form] input[name='eventUrl']")?.focus();
 });
 
 function resetEventForm() {
   const form = document.querySelector("[data-event-form]");
   form?.reset();
+  eventLinkImporter.reset();
   if (form) form.elements.eventId.value = "";
   document.querySelector("[data-event-editor-label]").textContent = "New Event";
   document.querySelector("[data-event-submit-label]").textContent = "Publish Event";
@@ -1207,6 +1214,7 @@ function editEvent(event) {
       ? new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
   }
   form.elements.visible.checked = event.visible !== false;
+  eventLinkImporter.updatePreview();
   document.querySelector("[data-event-editor-label]").textContent = "Edit Event";
   document.querySelector("[data-event-submit-label]").textContent = "Save Event";
   document.querySelector("[data-cancel-event]").hidden = false;

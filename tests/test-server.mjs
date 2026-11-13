@@ -1,16 +1,18 @@
-import { mkdtemp, cp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, cp, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 
-export async function startTestServer({ showCodes = true, mailStatus = null, mockClock = false, reviewCode = "" } = {}) {
+export async function startTestServer({ showCodes = true, mailStatus = null, mockClock = false, reviewCode = "", eventFixture = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "vip-features-"));
   if (mockClock) await writeFile(join(directory, "clock-offset"), "0");
-  for (const file of ["server.mjs", "database.mjs", "event-calendar.mjs", "index.html", "styles.css", "app.js", "admin.html", "admin.css", "admin.js", "assets"]) {
+  for (const file of ["server.mjs", "database.mjs", "event-calendar.mjs", "event-import.mjs", "index.html", "styles.css", "app.js", "admin.html", "admin.css", "admin.js", "admin-event-import.js", "assets"]) {
     await cp(new URL(`../${file}`, import.meta.url), join(directory, file), { recursive: true });
   }
+  await symlink(new URL("../node_modules", import.meta.url), join(directory, "node_modules"), "dir");
   const hooks = mailStatus !== null || mockClock ? ["--import", new URL("./server-test-hooks.mjs", import.meta.url).href] : [];
+  if (eventFixture) hooks.push("--import", new URL("./server-event-import-hooks.mjs", import.meta.url).href);
   const child = spawn(process.execPath, [...hooks, "server.mjs"], {
     cwd: directory,
     env: { ...process.env, PORT: "0", HOST: "127.0.0.1", NODE_ENV: "test",

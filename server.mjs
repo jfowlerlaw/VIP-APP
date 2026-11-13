@@ -8,6 +8,7 @@ import { createSign, randomBytes, randomInt, randomUUID, scrypt, timingSafeEqual
 import { promisify } from "node:util";
 import { createDatabase } from "./database.mjs";
 import { buildEventCalendar } from "./event-calendar.mjs";
+import { importEvent, EventImportError } from "./event-import.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 loadLocalEnv();
@@ -1104,6 +1105,18 @@ async function handleAdminApi(req, res, url) {
 
   if (route === "GET /api/admin/events") {
     sendJson(res, 200, { events: await vipDb.listEvents() });
+    return;
+  }
+
+  if (route === "POST /api/admin/events/import") {
+    const body = await readJsonBody(req);
+    try {
+      sendJson(res, 200, await importEvent(String(body.url || "")));
+    } catch (error) {
+      sendJson(res, error instanceof EventImportError ? error.status : 422, {
+        message: error instanceof EventImportError ? error.message : "This event could not be imported. Enter the details manually.",
+      });
+    }
     return;
   }
 

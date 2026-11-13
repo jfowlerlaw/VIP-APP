@@ -3,7 +3,7 @@ services:
     name: vip-app
     env: node
     plan: free
-    buildCommand: node --check server.mjs
+    buildCommand: npm ci --omit=dev && node --check server.mjs
     startCommand: node server.mjs
     envVars:
       - key: HOST
