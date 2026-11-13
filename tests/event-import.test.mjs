@@ -80,16 +80,67 @@ test("microdata imports event fields without requiring JSON-LD", () => {
   assert.equal(event.startsAt, '2026-11-20T00:00:00.000Z');
 });
 
-test("unknown end times, date-only and offset-less schedules are not guessed", () => {
-  for (const dates of [{ startDate: '2026-11-19' }, { startDate: sample.startDate },
-    { startDate: '2026-11-19T19:00:00', endDate: '2026-11-19T21:00:00' },
-    { startDate: sample.startDate, endDate: '2026-11-19T18:00:00-05:00' }]) {
+test("date-only and offset-less schedules are not guessed, but a known start never needs an invented end", () => {
+  for (const dates of [{ startDate: '2026-11-19' },
+    { startDate: '2026-11-19T19:00:00', endDate: '2026-11-19T21:00:00' }]) {
     const event = parseEventPage(markup({ ...sample, endDate: null, ...dates }), pageUrl);
     assert.equal(event.startsAt, null);
     assert.equal(event.endsAt, null);
     assert.equal(event.dateLabel, 'Nov 19, 2026');
   }
+  for (const endDate of [null, '2026-11-19T18:00:00-05:00', '2026-11-19T21:00:00', '2026-02-30T21:00:00Z']) {
+    const event = parseEventPage(markup({ ...sample, endDate }), pageUrl);
+    assert.equal(event.startsAt, '2026-11-20T00:00:00.000Z');
+    assert.equal(event.endsAt, null);
+  }
   assert.equal(parseEventPage(markup({ ...sample, startDate: '2026-02-30' }), pageUrl).dateLabel, '');
+  assert.equal(parseEventPage(markup({ ...sample, startDate: '2026-02-30T19:00:00Z' }), pageUrl).startsAt, null);
+});
+
+const game = { public_url: 'https://tickets.acme.com/games/2026/11/21/home-game', time_starts: '2026-11-22T00:00:00.000000Z',
+  home_timezone: 'America/New_York', venue_name: 'Kia Center', venue_location: 'Orlando, Florida',
+  date: '2026-11-21T05:00:00.000000Z', published_at: '2026-05-14T18:11:23Z' };
+function gameArticle(games, { headline = 'Community Food Drive on November 21', lead = 'Join us for the drive on November 21.', article = true } = {}) {
+  const attribute = (value) => JSON.stringify(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `${article ? markup({ '@type': 'NewsArticle', headline, url: pageUrl, datePublished: '2026-11-13T10:50:00-05:00' }) : ''}
+    <h1>${headline}</h1><div itemprop="articleBody"><p>${lead}</p></div><aside>${games.map((item) => `<div game="${attribute(item)}"></div>`).join('')}</aside>`;
+}
+
+test("news articles import their matching embedded game's real date, time and venue, not publication dates", () => {
+  const unrelated = { ...game, public_url: 'https://tickets.acme.com/games/another', time_starts: '2026-11-25T00:00:00Z' };
+  const event = parseEventPage(gameArticle([unrelated, game, game]), pageUrl);
+  assert.equal(event.startsAt, '2026-11-22T00:00:00.000Z');
+  assert.equal(event.dateLabel, 'Nov 21, 2026');
+  assert.equal(event.timeLabel, '7:00 PM EST');
+  assert.equal(event.endsAt, null);
+  assert.equal(event.location, 'Kia Center');
+  assert.equal(event.city, 'Orlando');
+  assert.equal(event.address, '');
+});
+
+test("embedded schedules reject unrelated, ambiguous, hidden and malformed game data", () => {
+  for (const games of [[{ ...game, time_starts: '2026-11-25T00:00:00Z' }],
+    [game, { ...game, public_url: 'https://tickets.acme.com/games/second', time_starts: '2026-11-21T20:00:00Z' }],
+    [{ ...game, hide_date: true }], [{ ...game, is_published: false }], [{ ...game, home_timezone: 'Invalid/Zone' }],
+    [{ ...game, time_starts: '2026-11-21' }], [{ ...game, public_url: 'https://different.acme.com/game' }], [{ ...game, public_url: null }]]) {
+    assert.equal(parseEventPage(gameArticle(games), pageUrl).startsAt, null);
+  }
+  assert.equal(parseEventPage(gameArticle([game], { headline: 'Food Drive on November 21, 2027', lead: 'Details to follow.' }), pageUrl).startsAt, null);
+  assert.equal(parseEventPage(gameArticle([game], { headline: 'Food Drive on November 21, 2027' }), pageUrl).startsAt, null);
+  assert.equal(parseEventPage(gameArticle([game], { article: false }), pageUrl).startsAt, null);
+  assert.equal(parseEventPage('<div game="not JSON"></div>', pageUrl).startsAt, null);
+  assert.equal(parseEventPage(gameArticle([game], { headline: 'Community Drive' }), pageUrl).startsAt, '2026-11-22T00:00:00.000Z');
+});
+
+test("embedded schedules support a directly linked game and prefer standard event metadata", () => {
+  const html = gameArticle([game], { article: false });
+  assert.equal(parseEventPage(html, game.public_url).startsAt, '2026-11-22T00:00:00.000Z');
+  const standard = parseEventPage(markup(sample) + gameArticle([game]), pageUrl);
+  assert.equal(standard.startsAt, '2026-11-20T00:00:00.000Z');
+  assert.equal(standard.location, 'Comedy Club');
+  const summer = parseEventPage(gameArticle([{ ...game, time_starts: '2027-07-22T00:00:00Z' }], { headline: 'Community Event on July 21', lead: '' }), pageUrl);
+  assert.equal(summer.dateLabel, 'Jul 21, 2027');
+  assert.equal(summer.timeLabel, '8:00 PM EDT');
 });
 
 test("multiple unrelated events and malicious graphic URLs cannot silently fill the wrong event", () => {
@@ -153,7 +204,9 @@ test("import returns only a reviewable draft and omits a private-hosted image", 
   const imageResolve = async (host) => [{ address: host === 'images.acme.com' ? '10.0.0.1' : '93.184.216.34', family: 4 }];
   const partial = await importEvent(pageUrl, { resolve: imageResolve, request: fakeRequest([{ body: markup({ ...sample, image: 'https://images.acme.com/pic.jpg', endDate: null }) }]) });
   assert.equal(partial.event.image, '');
-  assert.match(partial.message, /photo, start\/end times/);
+  assert.match(partial.message, /confirm photo/);
+  assert.match(partial.message, /No end time was listed/);
+  assert.equal(partial.event.startsAt, '2026-11-20T00:00:00.000Z');
 });
 
 test("import API requires admin login and never publishes on import or invalid links", async () => {
@@ -235,6 +288,51 @@ test("client preserves existing event values and does not mix manual and importe
   assert.equal(elements.eventName.value, 'Existing title');
   assert.equal(elements.startsAt.value, '2026-11-19T20:00');
   assert.equal(elements.endsAt.value, '');
+});
+
+test("client fills a start date/time without an end and removes only a previously imported end", async () => {
+  const { importer, elements, pending, edit } = clientFixture();
+  elements.eventUrl.value = pageUrl;
+  const first = importer.start();
+  pending[0].resolve({ event: parseEventPage(markup(sample), pageUrl) }); await first;
+  assert.ok(elements.endsAt.value);
+  const second = importer.start();
+  pending[1].resolve({ event: parseEventPage(markup({ ...sample, endDate: null }), pageUrl) }); await second;
+  assert.ok(elements.startsAt.value);
+  assert.equal(elements.endsAt.value, '');
+  assert.equal(elements.eventDate.value, 'Nov 19, 2026');
+  edit('endsAt', '2026-11-20T23:00');
+  const third = importer.start();
+  pending[2].resolve({ event: parseEventPage(markup({ ...sample, endDate: null }), pageUrl) }); await third;
+  assert.equal(elements.endsAt.value, '2026-11-20T23:00');
+});
+
+test("API saves a known start with no end, retains it on edits, and still validates supplied endings", async () => {
+  const server = await startTestServer();
+  try {
+    const request = (path, method, body, cookie) => fetch(server.origin + path, { method, headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const login = await request('/api/admin/login', 'POST', { password: 'local-feature-test' });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    const payload = { title: 'Start-only event', startsAt: '2026-11-22T00:00:00Z', endsAt: null, timeZone: 'America/New_York' };
+    const created = await request('/api/admin/events', 'POST', payload, cookie);
+    assert.equal(created.status, 201);
+    const saved = (await created.json()).event;
+    assert.equal(saved.startsAt, '2026-11-22T00:00:00.000Z');
+    assert.equal(saved.endsAt, null);
+    assert.equal(saved.dateLabel, 'Nov 21, 2026');
+    assert.equal(saved.timeLabel, '7:00 PM EST');
+    const edited = await request(`/api/admin/events/${saved.id}`, 'PATCH', { title: 'Updated start-only event' }, cookie);
+    assert.equal(edited.status, 200);
+    assert.equal((await edited.json()).event.endsAt, null);
+    const listing = await request('/api/events', 'GET').then((res) => res.json());
+    assert.equal(listing.events.find((event) => event.id === saved.id).expiresAt, '2026-11-22T05:00:00.000Z');
+    for (const fields of [{ startsAt: null, endsAt: '2026-11-22T02:00:00Z' }, { startsAt: 'not a date' }, { endsAt: 'not a date' }, { endsAt: payload.startsAt }, { endsAt: '2026-11-21T23:00:00Z' }]) {
+      assert.equal((await request('/api/admin/events', 'POST', { ...payload, ...fields }, cookie)).status, 400);
+    }
+    const ended = await request(`/api/admin/events/${saved.id}`, 'PATCH', { endsAt: '2026-11-22T02:00:00Z' }, cookie);
+    assert.equal(ended.status, 200);
+    assert.equal((await ended.json()).event.endsAt, '2026-11-22T02:00:00.000Z');
+  } finally { await server.close(); }
 });
 
 test("client errors unblock manual saving and saving prevents a concurrent import", async () => {

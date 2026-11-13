@@ -1146,8 +1146,8 @@ document.querySelector("[data-event-form]")?.addEventListener("submit", async (e
     resultMessage.textContent = "Choose valid local times. A daylight-saving change may skip the time you entered.";
     return;
   }
-  if (Boolean(startsAt) !== Boolean(endsAt) || (startsAt && new Date(endsAt) <= new Date(startsAt))) {
-    resultMessage.textContent = "Enter both start and end times, with the end after the start.";
+  if ((!startsAt && endsAt) || (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt))) {
+    resultMessage.textContent = "An end time needs a start time and must be after it. You can leave End blank.";
     return;
   }
   if (!adminApiReady) {
@@ -1225,7 +1225,7 @@ function editEvent(event) {
 document.querySelector("[data-cancel-event]")?.addEventListener("click", resetEventForm);
 const eventEditorZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 document.querySelector("[data-event-start-label]").textContent = `Start (${eventEditorZone})`;
-document.querySelector("[data-event-end-label]").textContent = `End (${eventEditorZone})`;
+document.querySelector("[data-event-end-label]").textContent = `End (${eventEditorZone}, optional)`;
 
 document.querySelectorAll("[data-toggle-row]").forEach((button) => {
   button.addEventListener("click", () => {

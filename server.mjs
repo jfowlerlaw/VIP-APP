@@ -1532,9 +1532,9 @@ function createAnnouncement(title, body, actionView, memberId = null) {
 function normalizeEventDetails(body) {
   const startsAt = body.startsAt ? new Date(body.startsAt) : null;
   const endsAt = body.endsAt ? new Date(body.endsAt) : null;
-  if (Boolean(startsAt) !== Boolean(endsAt) ||
-      (startsAt && (!Number.isFinite(+startsAt) || !Number.isFinite(+endsAt) || endsAt <= startsAt))) {
-    throw new Error("Enter a valid start and end time. The end must be after the start.");
+  if ((startsAt && !Number.isFinite(+startsAt)) ||
+      (endsAt && (!startsAt || !Number.isFinite(+endsAt) || endsAt <= startsAt))) {
+    throw new Error("Enter a valid start time. End is optional, but must be after the start when provided.");
   }
   const timeZone = String(body.timeZone || "America/New_York");
   try {

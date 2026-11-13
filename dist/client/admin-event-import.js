@@ -101,8 +101,15 @@ class EventLinkImporter {
         eventDate: event.dateLabel, eventLocation: event.location, city: event.city, address: event.address,
       };
       const canFill = (name) => !this.dirty.has(name) && (!this.form.elements[name].value || this.imported.get(name) === this.form.elements[name].value);
-      if (event.startsAt && event.endsAt && canFill("startsAt") && canFill("endsAt")) {
+      for (const name of ["startsAt", "endsAt"]) {
+        if (!event[name] && canFill(name) && this.imported.has(name)) {
+          this.form.elements[name].value = "";
+          this.imported.delete(name);
+        }
+      }
+      if (event.startsAt && canFill("startsAt") && canFill("endsAt")) {
         for (const name of ["startsAt", "endsAt"]) {
+          if (!event[name]) continue;
           const date = new Date(event[name]);
           if (Number.isFinite(+date)) values[name] = new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
         }
