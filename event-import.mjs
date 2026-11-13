@@ -1,6 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { lookup } from "node:dns/promises";
+import { createGunzip, createInflate, createBrotliDecompress } from "node:zlib";
 import { load, loadBuffer } from "cheerio";
 import ipaddr from "ipaddr.js";
 
@@ -59,7 +60,7 @@ export async function fetchEventPage(value, { resolve = lookup, request, timeout
         const send = request || (url.protocol === "https:" ? https.request : http.request);
         const req = send(url, {
           method: "GET", signal: controller.signal, agent: false,
-          headers: { "User-Agent": "MoeVIP-EventImporter/1.0", Accept: "text/html,application/xhtml+xml", "Accept-Encoding": "identity" },
+          headers: { "User-Agent": "MoeVIP-EventImporter/1.0", Accept: "text/html,application/xhtml+xml", "Accept-Encoding": "gzip, deflate, br" },
           lookup: (_host, options, callback) => options.all
             ? callback(null, [address]) : callback(null, address.address, address.family),
         }, (res) => {
@@ -68,20 +69,32 @@ export async function fetchEventPage(value, { resolve = lookup, request, timeout
             resolve({ redirect: res.headers.location }); res.destroy(); return;
           }
           if (status !== 200) { reject(new EventImportError(unavailable)); res.destroy(); return; }
+          const encoding = (res.headers['content-encoding'] || 'identity').trim().toLowerCase();
           if (!/^(text\/html|application\/xhtml\+xml)(;|$)/i.test(res.headers['content-type'] || "") ||
-              !['identity', undefined].includes(res.headers['content-encoding'])) {
+              !['identity', 'gzip', 'deflate', 'br'].includes(encoding)) {
             reject(new EventImportError("This link is not a readable event web page. Enter the event details manually.")); res.destroy(); return;
           }
+          const decoders = { gzip: createGunzip, deflate: createInflate, br: createBrotliDecompress };
+          const stream = encoding === 'identity' ? res : res.pipe(decoders[encoding]());
+          let wireSize = 0;
           let size = 0;
           const chunks = [];
           res.on("data", (chunk) => {
+            wireSize += chunk.length;
+            if (wireSize > maxBytes) {
+              reject(new EventImportError("This event page is too large to import. Enter the details manually."));
+              res.destroy(); stream.destroy();
+            }
+          });
+          stream.on("data", (chunk) => {
             size += chunk.length;
-            if (size > maxBytes) { reject(new EventImportError("This event page is too large to import. Enter the details manually.")); res.destroy(); }
+            if (size > maxBytes) { reject(new EventImportError("This event page is too large to import. Enter the details manually.")); res.destroy(); stream.destroy(); }
             else chunks.push(chunk);
           });
-          res.on("end", () => resolve({ html: Buffer.concat(chunks) }));
+          stream.on("end", () => resolve({ html: Buffer.concat(chunks) }));
+          stream.on("error", (error) => { res.destroy(); reject(error); });
           res.on("error", reject);
-          res.on("aborted", () => reject(new EventImportError(unavailable)));
+          res.on("aborted", () => { stream.destroy(); reject(new EventImportError(unavailable)); });
         });
         req.on("error", reject);
         req.end();

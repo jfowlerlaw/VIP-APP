@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { gzipSync, deflateSync, brotliCompressSync } from "node:zlib";
 import { publicEventUrl, isPublicAddress, resolvePublicAddress, parseEventPage, fetchEventPage, importEvent } from "../event-import.mjs";
 import { startTestServer } from "./test-server.mjs";
 
@@ -134,6 +135,15 @@ test("fetching bounds response size, time, content type and HTTP failures", asyn
   await assert.rejects(fetchEventPage(pageUrl, { resolve, request: fakeRequest([{ status: 403 }]) }), /could not be read/);
   await assert.rejects(fetchEventPage(pageUrl, { resolve, request: fakeRequest([]), timeout: 15 }), /too long/);
   await assert.rejects(fetchEventPage(pageUrl, { resolve: () => new Promise(() => {}), timeout: 15 }), /too long/);
+});
+
+test("compressed pages import correctly and decompression cannot bypass the size limit", async () => {
+  for (const [encoding, compress] of [['gzip', gzipSync], ['deflate', deflateSync], ['br', brotliCompressSync]]) {
+    const page = await fetchEventPage(pageUrl, { resolve, request: fakeRequest([{ headers: { 'content-encoding': encoding }, body: compress(markup(sample)) }]) });
+    assert.equal(parseEventPage(page.html, pageUrl).title, sample.name);
+  }
+  await assert.rejects(fetchEventPage(pageUrl, { resolve, maxBytes: 500, request: fakeRequest([{ headers: { 'content-encoding': 'gzip' }, body: gzipSync('x'.repeat(5000)) }]) }), /too large/);
+  await assert.rejects(fetchEventPage(pageUrl, { resolve, request: fakeRequest([{ headers: { 'content-encoding': 'gzip' }, body: 'not compressed' }]) }));
 });
 
 test("import returns only a reviewable draft and omits a private-hosted image", async () => {
