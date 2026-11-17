@@ -663,7 +663,7 @@ function cardScreenTitle(member = activeMember) {
 function activateView(target, title) {
   if (appScreen) {
     appScreen.dataset.activeView = target;
-    appScreen.classList.toggle("is-refined", ["perks", "events", "notifications", "profile"].includes(target));
+    appScreen.classList.toggle("is-refined", ["card", "perks", "events", "notifications", "concierge", "profile"].includes(target));
   }
   views.forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${target}`);
@@ -680,7 +680,8 @@ function activateView(target, title) {
   });
 
   if (viewTitle) {
-    viewTitle.textContent = target === "card" ? cardScreenTitle() : target === "perks" ? "Perks" : title;
+    const fixedTitle = { perks: "Perks", concierge: "Help" }[target];
+    viewTitle.textContent = target === "card" ? cardScreenTitle() : fixedTitle || title;
   }
   if (target === "card") fitCardName();
   if (target === "notifications" && activeMember) loadInbox();
@@ -941,7 +942,7 @@ function updateNextInvite(events) {
   const date = nextEvent.dateLabel || "Date TBD";
   const location = nextEvent.location || nextEvent.city || "Location TBD";
   nextEventTitle.textContent = nextEvent.title || "VIP Event";
-  nextEventMeta.textContent = `${date}, ${location} · Tap to view details`;
+  nextEventMeta.textContent = `${date} · ${location}`;
 }
 
 function updateInboxBadges() {

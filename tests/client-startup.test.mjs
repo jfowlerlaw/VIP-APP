@@ -171,7 +171,7 @@ function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
 
-test("clean headers apply to content and settings views without changing Card or Help", (t) => {
+test("clean headers cover every tab while preserving the card greeting and Help destination", (t) => {
   const c = client(t, success);
   c.run('activateView("perks", "VIP Perks")');
   assert.equal(c.elements[".app-screen"].dataset.activeView, "perks");
@@ -190,10 +190,13 @@ test("clean headers apply to content and settings views without changing Card or
   assert.equal(c.elements["#view-perks"].classList.contains("is-active"), false);
   assert.equal(c.elements['[data-view-target="perks"]'].attributes["aria-current"], undefined);
   c.run('activateView("card", "Card")');
-  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), false);
+  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), true);
+  assert.equal(c.elements["#view-title"].textContent, "Hi, VIP!");
   c.run('activateView("concierge", "Concierge")');
-  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), false);
-  assert.equal(c.elements["#view-title"].textContent, "Concierge");
+  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), true);
+  assert.equal(c.elements["#view-title"].textContent, "Help");
+  assert.equal(c.elements["#view-concierge"].classList.contains("is-active"), true);
+  assert.equal(c.elements['[data-view-target="concierge"]'].attributes["aria-current"], "page");
 });
 
 test("perks keep long titles separate from actions and omit unconfigured filler", (t) => {
