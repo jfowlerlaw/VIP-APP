@@ -171,6 +171,20 @@ function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
 
+test("the simpler Perks header is scoped to its view and resets when leaving", (t) => {
+  const c = client(t, success);
+  c.run('activateView("perks", "VIP Perks")');
+  assert.equal(c.elements[".app-screen"].dataset.activeView, "perks");
+  assert.equal(c.elements["#view-title"].textContent, "Perks");
+  assert.equal(c.elements["#view-perks"].classList.contains("is-active"), true);
+  assert.equal(c.elements['[data-view-target="perks"]'].attributes["aria-current"], "page");
+  c.run('activateView("profile", "Profile")');
+  assert.equal(c.elements[".app-screen"].dataset.activeView, "profile");
+  assert.equal(c.elements["#view-title"].textContent, "Profile");
+  assert.equal(c.elements["#view-perks"].classList.contains("is-active"), false);
+  assert.equal(c.elements['[data-view-target="perks"]'].attributes["aria-current"], undefined);
+});
+
 test("perks keep long titles separate from actions and omit unconfigured filler", (t) => {
   const c = client(t, success, { perks: true });
   c.context.perks = [{ title: "Get a FREE Vehicle Registration Holder", description: "  ", note: "", icon: "gift",

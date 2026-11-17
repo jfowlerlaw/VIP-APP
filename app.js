@@ -661,6 +661,7 @@ function cardScreenTitle(member = activeMember) {
 }
 
 function activateView(target, title) {
+  if (appScreen) appScreen.dataset.activeView = target;
   views.forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${target}`);
     if (view.id === `view-${target}`) {
@@ -676,7 +677,7 @@ function activateView(target, title) {
   });
 
   if (viewTitle) {
-    viewTitle.textContent = target === "card" ? cardScreenTitle() : title;
+    viewTitle.textContent = target === "card" ? cardScreenTitle() : target === "perks" ? "Perks" : title;
   }
   if (target === "card") fitCardName();
   if (target === "notifications" && activeMember) loadInbox();
