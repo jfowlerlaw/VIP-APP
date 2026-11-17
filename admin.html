@@ -491,12 +491,34 @@ Casey,Nguyen,West Palm Beach,casey@example.com,Unclaimed</textarea>
                   </label>
                 </div>
                 <label>
+                  Button action
+                  <select name="actionType" data-perk-action-type>
+                    <option value="link">Open a link</option>
+                    <option value="email">Compose an email</option>
+                    <option value="message">Show a message</option>
+                  </select>
+                </label>
+                <label data-perk-link-fields>
                   Action URL
                   <input name="actionUrl" value="https://www.facebook.com/share/g/1B5JVZj46a/">
                 </label>
-                <label>
+                <div class="perk-email-fields" data-perk-email-fields hidden>
+                  <label>
+                    Recipient email
+                    <input name="emailTo" type="email" autocomplete="off" maxlength="254" disabled>
+                  </label>
+                  <label>
+                    Subject (optional)
+                    <input name="emailSubject" maxlength="200" disabled>
+                  </label>
+                  <label>
+                    Email message (optional)
+                    <textarea name="emailBody" rows="3" maxlength="4000" disabled></textarea>
+                  </label>
+                </div>
+                <label data-perk-message-fields hidden>
                   Button message
-                  <input name="actionMessage" placeholder="Shown when there is no URL">
+                  <input name="actionMessage" disabled>
                 </label>
                 <label class="inline-check">
                   <input name="visible" type="checkbox" checked>

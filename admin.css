@@ -711,7 +711,7 @@ td small {
 
 .perk-list article {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 40px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 10px;
   padding: 12px;
@@ -719,7 +719,7 @@ td small {
   border-radius: var(--radius);
 }
 
-.perk-list svg {
+.perk-list article > svg {
   width: 40px;
   height: 40px;
   padding: 10px;
@@ -728,15 +728,15 @@ td small {
   background: var(--red);
 }
 
-.perk-list .accent-blue svg {
+.perk-list .accent-blue > svg {
   background: var(--blue);
 }
 
-.perk-list .accent-green svg {
+.perk-list .accent-green > svg {
   background: var(--green);
 }
 
-.perk-list .accent-yellow svg {
+.perk-list .accent-yellow > svg {
   color: #171717;
   background: var(--yellow);
 }
@@ -748,6 +748,15 @@ td small {
   font-size: 0.72rem;
   font-weight: 800;
 }
+
+.perk-list-copy { min-width: 0; overflow-wrap: anywhere; }
+.perk-list .row-actions { grid-column: 2 / -1; }
+.perk-order-controls { display: grid; gap: 4px; align-self: start; }
+.perk-list .perk-order-controls button { width: 44px; height: 44px; padding: 0; }
+.perk-order-controls svg { width: 18px; height: 18px; }
+.perk-list button:disabled { opacity: 0.4; cursor: default; }
+.perk-email-fields { display: grid; gap: 12px; }
+[data-perk-form] [hidden] { display: none; }
 
 .gift-list label {
   display: grid;
@@ -1062,6 +1071,10 @@ td small {
   .push-device-list article {
     grid-template-columns: 1fr;
   }
+
+  .perk-list article { grid-template-columns: 32px minmax(0, 1fr) 44px; }
+  .perk-list article > svg { width: 32px; height: 32px; padding: 7px; }
+  .perk-list .row-actions { grid-column: 1 / -1; }
 
   .config-list {
     grid-template-columns: 1fr;

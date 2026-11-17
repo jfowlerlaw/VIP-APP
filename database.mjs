@@ -8,6 +8,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
   const dataDir = join(rootDir, "data");
   const dbPath = join(dataDir, "vip-db.json");
   const supabase = getSupabaseConfig();
+  let perkWrites = Promise.resolve();
 
   return {
     mode: supabase ? "supabase" : "local-json",
@@ -31,6 +32,7 @@ export function createDatabase({ rootDir, seedDatabase }) {
     createPerk,
     updatePerk,
     deletePerk,
+    reorderPerks,
     listRequests,
     createRequest,
     updateRequestStatus,
@@ -379,13 +381,18 @@ export function createDatabase({ rootDir, seedDatabase }) {
       return visibleOnly ? perks.filter((perk) => perk.visible !== false) : perks;
     }
 
-    const query = visibleOnly
-      ? queryString({ select: "*", visible: "eq.true", order: "created_at.desc" })
-      : queryString({ select: "*", order: "created_at.desc" });
+    const filters = { select: "*", ...(visibleOnly ? { visible: "eq.true" } : {}) };
+    const query = queryString({ ...filters, order: "sort_order.asc,created_at.desc,id.asc" });
     try {
       const rows = await supabaseRequest("vip_perks", { query });
       return rows.map(perkFromRow);
     } catch (error) {
+      if (/sort_order/i.test(error.message || "")) {
+        const rows = await supabaseRequest("vip_perks", {
+          query: queryString({ ...filters, order: "created_at.desc" }),
+        });
+        return rows.map(perkFromRow);
+      }
       if (/vip_perks/i.test(error.message || "")) {
         const perks = seedDatabase.perks || [];
         return visibleOnly ? perks.filter((perk) => perk.visible !== false) : perks;
@@ -396,11 +403,13 @@ export function createDatabase({ rootDir, seedDatabase }) {
 
   async function createPerk(perk) {
     if (!supabase) {
-      const db = await readLocalDb();
-      db.perks ||= [];
-      db.perks.unshift(perk);
-      await writeLocalDb(db);
-      return perk;
+      return withPerkWrite(async () => {
+        const db = await readLocalDb();
+        db.perks ||= [];
+        db.perks.unshift(perk);
+        await writeLocalDb(db);
+        return perk;
+      });
     }
 
     const rows = await supabaseRequest("vip_perks", {
@@ -413,12 +422,14 @@ export function createDatabase({ rootDir, seedDatabase }) {
 
   async function updatePerk(id, patch) {
     if (!supabase) {
-      const db = await readLocalDb();
-      const perk = (db.perks || []).find((item) => item.id === id);
-      if (!perk) return null;
-      Object.assign(perk, patch);
-      await writeLocalDb(db);
-      return perk;
+      return withPerkWrite(async () => {
+        const db = await readLocalDb();
+        const perk = (db.perks || []).find((item) => item.id === id);
+        if (!perk) return null;
+        Object.assign(perk, patch);
+        await writeLocalDb(db);
+        return perk;
+      });
     }
 
     const rows = await supabaseRequest("vip_perks", {
@@ -432,14 +443,16 @@ export function createDatabase({ rootDir, seedDatabase }) {
 
   async function deletePerk(id) {
     if (!supabase) {
-      const db = await readLocalDb();
-      const perks = db.perks || [];
-      const perkIndex = perks.findIndex((perk) => perk.id === id);
-      if (perkIndex === -1) return null;
-      const [deletedPerk] = perks.splice(perkIndex, 1);
-      db.perks = perks;
-      await writeLocalDb(db);
-      return deletedPerk;
+      return withPerkWrite(async () => {
+        const db = await readLocalDb();
+        const perks = db.perks || [];
+        const perkIndex = perks.findIndex((perk) => perk.id === id);
+        if (perkIndex === -1) return null;
+        const [deletedPerk] = perks.splice(perkIndex, 1);
+        db.perks = perks;
+        await writeLocalDb(db);
+        return deletedPerk;
+      });
     }
 
     const rows = await supabaseRequest("vip_perks", {
@@ -448,6 +461,42 @@ export function createDatabase({ rootDir, seedDatabase }) {
       headers: { Prefer: "return=representation" },
     });
     return rows[0] ? perkFromRow(rows[0]) : null;
+  }
+
+  function withPerkWrite(write) {
+    const result = perkWrites.then(write);
+    perkWrites = result.catch(() => {});
+    return result;
+  }
+
+  async function reorderPerks(ids) {
+    if (!Array.isArray(ids) || ids.length > 5000 || ids.some((id) => typeof id !== "string" || !id.trim()) || new Set(ids).size !== ids.length) {
+      throw Object.assign(new Error("Invalid perk order."), { status: 400 });
+    }
+    const changed = () => Object.assign(new Error("Perks changed while reordering. Refresh the page and try again."), { status: 409 });
+    if (!supabase) {
+      return withPerkWrite(async () => {
+        const db = await readLocalDb();
+        const perks = new Map((db.perks || []).map((perk) => [perk.id, perk]));
+        if (ids.length !== perks.size || ids.some((id) => !perks.has(id))) throw changed();
+        db.perks = ids.map((id) => perks.get(id));
+        await writeLocalDb(db);
+        return db.perks;
+      });
+    }
+    try {
+      const rows = await supabaseRequest("rpc/reorder_vip_perks", { method: "POST", body: { perk_ids: ids } });
+      if (!Array.isArray(rows) || rows.length !== ids.length || rows.some((row, index) => row.id !== ids[index])) {
+        throw new Error("The saved perk order could not be verified. Refresh before trying again.");
+      }
+      return rows.map(perkFromRow);
+    } catch (error) {
+      if (/PERK_ORDER_CHANGED/.test(error.message || "")) throw changed();
+      if (/reorder_vip_perks/.test(error.message || "") && [400, 404].includes(error.status)) {
+        throw Object.assign(new Error("Perk ordering is not ready. Run supabase/add_perk_ordering.sql in Supabase first."), { status: 503 });
+      }
+      throw error;
+    }
   }
 
   async function listRequests() {
@@ -871,6 +920,7 @@ function perkFromRow(row) {
     actionUrl: row.action_url,
     actionMessage: row.action_message,
     visible: row.visible,
+    sortOrder: row.sort_order ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -35,6 +35,8 @@ const adminThemeStorageKey = "jcm-vip-admin-theme";
 const adminThemeMedia = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 let previewRecords = [];
 let adminApiReady = false;
+let currentPerks = [];
+let perkMutationBusy = false;
 let toastTimer;
 
 async function apiRequest(path, options = {}) {
@@ -411,6 +413,7 @@ function renderEvents(events) {
 
 function renderPerks(perks) {
   if (!perkList || !Array.isArray(perks)) return;
+  currentPerks = [...perks];
   perkList.innerHTML = "";
 
   if (perks.length === 0) {
@@ -418,16 +421,24 @@ function renderPerks(perks) {
     return;
   }
 
-  perks.forEach((perk) => {
+  perks.forEach((perk, index) => {
     const article = document.createElement("article");
     article.className = `accent-${perk.accent || "red"}`;
     article.dataset.perkId = perk.id || "";
     article.innerHTML = `
       <i data-lucide="${escapeHtml(perk.icon || "star")}" aria-hidden="true"></i>
-      <div>
+      <div class="perk-list-copy">
         <strong>${escapeHtml(perk.title || "VIP Perk")}</strong>
         <p>${escapeHtml(perk.description || "VIP member perk.")}</p>
-        <small>${escapeHtml([perk.note, perk.buttonLabel, perk.actionUrl ? "link" : "message"].filter(Boolean).join(" · "))}</small>
+        <small>${escapeHtml([perk.note, perk.buttonLabel, /^mailto:/i.test(perk.actionUrl || "") ? "email" : perk.actionUrl ? "link" : "message"].filter(Boolean).join(" · "))}</small>
+      </div>
+      <div class="perk-order-controls" role="group" aria-label="Reorder ${escapeHtml(perk.title || "perk")}">
+        <button type="button" data-move-perk="${escapeHtml(perk.id || "")}" data-perk-direction="-1" data-perk-boundary="${index === 0}" aria-label="Move ${escapeHtml(perk.title || "perk")} up" title="Move up" ${index === 0 ? "disabled" : ""}>
+          <i data-lucide="arrow-up" aria-hidden="true"></i>
+        </button>
+        <button type="button" data-move-perk="${escapeHtml(perk.id || "")}" data-perk-direction="1" data-perk-boundary="${index === perks.length - 1}" aria-label="Move ${escapeHtml(perk.title || "perk")} down" title="Move down" ${index === perks.length - 1 ? "disabled" : ""}>
+          <i data-lucide="arrow-down" aria-hidden="true"></i>
+        </button>
       </div>
       <div class="row-actions">
         <button type="button" data-edit-perk="${escapeHtml(perk.id || "")}">Edit</button>
@@ -443,10 +454,80 @@ function renderPerks(perks) {
     article.querySelector("[data-edit-perk]").addEventListener("click", () => editPerk(perk));
     article.querySelector("[data-toggle-perk]").addEventListener("click", () => togglePerk(perk));
     article.querySelector("[data-delete-perk]").addEventListener("click", () => deletePerk(perk));
+    article.querySelectorAll("[data-move-perk]").forEach((button) => {
+      button.addEventListener("click", () => movePerk(perk.id, Number(button.dataset.perkDirection)));
+    });
     perkList.append(article);
   });
 
+  setPerkMutationBusy(perkMutationBusy);
   if (window.lucide) window.lucide.createIcons();
+}
+
+function setPerkMutationBusy(busy) {
+  perkMutationBusy = busy;
+  perkList?.setAttribute("aria-busy", String(busy));
+  perkList?.querySelectorAll("button").forEach((button) => {
+    button.disabled = busy || button.dataset.perkBoundary === "true";
+  });
+  const submit = perkForm?.querySelector("[data-perk-submit]");
+  if (submit) submit.disabled = busy;
+}
+
+async function movePerk(id, direction) {
+  if (!adminApiReady || perkMutationBusy || ![-1, 1].includes(direction)) return;
+  const index = currentPerks.findIndex((perk) => perk.id === id);
+  const destination = index + direction;
+  if (index < 0 || destination < 0 || destination >= currentPerks.length) return;
+  const ordered = [...currentPerks];
+  [ordered[index], ordered[destination]] = [ordered[destination], ordered[index]];
+  setPerkMutationBusy(true);
+  try {
+    const result = await apiRequest("/api/admin/perks/reorder", {
+      method: "POST", body: JSON.stringify({ ids: ordered.map((perk) => perk.id) }),
+    });
+    if (!Array.isArray(result.perks)) throw new Error("Perk order could not be confirmed. Refresh the page.");
+    renderPerks(result.perks);
+    showToast("Perk order saved.");
+  } catch (error) {
+    if (error.status === 409) {
+      try { renderPerks((await apiRequest("/api/admin/perks")).perks); } catch { /* Keep the last confirmed list. */ }
+    }
+    showToast(error.message || "Perk order could not be saved.");
+  } finally {
+    setPerkMutationBusy(false);
+    const controls = [...(perkList?.querySelectorAll("[data-move-perk]") || [])];
+    const focus = controls.find((button) => button.dataset.movePerk === id && Number(button.dataset.perkDirection) === direction && !button.disabled)
+      || controls.find((button) => button.dataset.movePerk === id && !button.disabled);
+    focus?.focus();
+  }
+}
+
+function syncPerkActionFields() {
+  if (!perkForm) return;
+  const type = perkForm.elements.actionType.value;
+  for (const [selector, visible] of [["[data-perk-link-fields]", type === "link"],
+    ["[data-perk-email-fields]", type === "email"], ["[data-perk-message-fields]", type === "message"]]) {
+    const group = perkForm.querySelector(selector);
+    if (!group) continue;
+    group.hidden = !visible;
+    group.querySelectorAll("input, textarea").forEach((input) => { input.disabled = !visible; });
+  }
+  perkForm.elements.actionUrl.required = type === "link";
+  perkForm.elements.emailTo.required = type === "email";
+}
+
+function perkEmailUrl(data, original = "") {
+  const to = String(data.get("emailTo") || "").trim();
+  const url = new URL(`mailto:${to}`);
+  if (/^mailto:/i.test(original)) url.search = new URL(original).search;
+  for (const [field, parameter] of [["emailSubject", "subject"], ["emailBody", "body"]]) {
+    const value = String(data.get(field) || "").replace(/\r?\n/g, "\r\n");
+    if (value) url.searchParams.set(parameter, value);
+    else url.searchParams.delete(parameter);
+  }
+  url.search = url.searchParams.toString().replace(/\+/g, "%20");
+  return url.href;
 }
 
 function resetPerkForm() {
@@ -461,6 +542,12 @@ function resetPerkForm() {
   perkForm.elements.accent.value = "green";
   perkForm.elements.actionUrl.value = "https://www.facebook.com/share/g/1B5JVZj46a/";
   perkForm.elements.actionMessage.value = "";
+  perkForm.elements.actionType.value = "link";
+  perkForm.elements.emailTo.value = "";
+  perkForm.elements.emailSubject.value = "";
+  perkForm.elements.emailBody.value = "";
+  delete perkForm.dataset.emailUrl;
+  syncPerkActionFields();
   perkForm.elements.visible.checked = true;
   if (perkFormMode) perkFormMode.textContent = "Add Perk";
 }
@@ -476,6 +563,23 @@ function editPerk(perk) {
   perkForm.elements.accent.value = perk.accent || "red";
   perkForm.elements.actionUrl.value = perk.actionUrl || "";
   perkForm.elements.actionMessage.value = perk.actionMessage || "";
+  perkForm.elements.actionType.value = perk.actionUrl ? "link" : "message";
+  delete perkForm.dataset.emailUrl;
+  perkForm.elements.emailTo.value = "";
+  perkForm.elements.emailSubject.value = "";
+  perkForm.elements.emailBody.value = "";
+  if (/^mailto:/i.test(perk.actionUrl || "")) {
+    try {
+      const url = new URL(perk.actionUrl);
+      const recipient = decodeURIComponent(url.pathname);
+      perkForm.elements.actionType.value = "email";
+      perkForm.elements.emailTo.value = recipient;
+      perkForm.elements.emailSubject.value = url.searchParams.get("subject") || "";
+      perkForm.elements.emailBody.value = url.searchParams.get("body") || "";
+      perkForm.dataset.emailUrl = url.href;
+    } catch { /* Keep unusual existing destinations editable as links. */ }
+  }
+  syncPerkActionFields();
   perkForm.elements.visible.checked = perk.visible !== false;
   if (perkFormMode) perkFormMode.textContent = "Edit Perk";
   perkForm.querySelector("input[name='title']")?.focus();
@@ -483,6 +587,7 @@ function editPerk(perk) {
 
 function perkPayloadFromForm(form) {
   const data = new FormData(form);
+  const type = String(data.get("actionType") || "link");
   return {
     title: String(data.get("title") || ""),
     description: String(data.get("description") || ""),
@@ -490,14 +595,15 @@ function perkPayloadFromForm(form) {
     icon: String(data.get("icon") || "star"),
     accent: String(data.get("accent") || "red"),
     buttonLabel: String(data.get("buttonLabel") || "View"),
-    actionUrl: String(data.get("actionUrl") || ""),
-    actionMessage: String(data.get("actionMessage") || ""),
+    actionUrl: type === "email" ? perkEmailUrl(data, form.dataset.emailUrl) : type === "link" ? String(data.get("actionUrl") || "") : "",
+    actionMessage: type === "message" ? String(data.get("actionMessage") || "") : "",
     visible: data.get("visible") === "on",
   };
 }
 
 async function togglePerk(perk) {
-  if (!adminApiReady || !perk.id) return;
+  if (!adminApiReady || !perk.id || perkMutationBusy) return;
+  setPerkMutationBusy(true);
   try {
     const result = await apiRequest(`/api/admin/perks/${encodeURIComponent(perk.id)}`, {
       method: "PATCH",
@@ -507,14 +613,16 @@ async function togglePerk(perk) {
     showToast(`${perk.title || "Perk"} ${perk.visible === false ? "shown" : "hidden"}.`);
   } catch (error) {
     showToast(error.message || "Perk visibility could not be saved.");
+  } finally {
+    setPerkMutationBusy(false);
   }
 }
 
 async function deletePerk(perk) {
-  if (!adminApiReady || !perk.id) return;
+  if (!adminApiReady || !perk.id || perkMutationBusy) return;
   const confirmed = window.confirm(`Delete ${perk.title || "this perk"} from the member app?`);
   if (!confirmed) return;
-
+  setPerkMutationBusy(true);
   try {
     const result = await apiRequest(`/api/admin/perks/${encodeURIComponent(perk.id)}`, {
       method: "DELETE",
@@ -524,6 +632,8 @@ async function deletePerk(perk) {
     showToast("Perk deleted.");
   } catch (error) {
     showToast(error.message || "Perk could not be deleted.");
+  } finally {
+    setPerkMutationBusy(false);
   }
 }
 
@@ -1098,6 +1208,7 @@ runImportButton?.addEventListener("click", async () => {
 
 perkForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!adminApiReady || perkMutationBusy) return;
   const form = event.currentTarget;
   const payload = perkPayloadFromForm(form);
   if (!payload.title.trim()) {
@@ -1106,6 +1217,7 @@ perkForm?.addEventListener("submit", async (event) => {
   }
 
   const perkId = String(new FormData(form).get("perkId") || "");
+  setPerkMutationBusy(true);
   try {
     const result = await apiRequest(perkId ? `/api/admin/perks/${encodeURIComponent(perkId)}` : "/api/admin/perks", {
       method: perkId ? "PATCH" : "POST",
@@ -1116,8 +1228,13 @@ perkForm?.addEventListener("submit", async (event) => {
     showToast(perkId ? "Perk updated." : "Perk added.");
   } catch (error) {
     showToast(error.message || "Perk could not be saved.");
+  } finally {
+    setPerkMutationBusy(false);
   }
 });
+
+document.querySelector("[data-perk-action-type]")?.addEventListener("change", syncPerkActionFields);
+syncPerkActionFields();
 
 document.querySelector("[data-perk-reset]")?.addEventListener("click", () => {
   resetPerkForm();

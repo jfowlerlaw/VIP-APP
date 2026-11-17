@@ -238,6 +238,22 @@ test("perks retain configured copy, notes, message actions and empty/error state
   assert.match(list.innerHTML, /Perks temporarily unavailable/);
 });
 
+test("email perks keep their draft URL and use the native email handoff without a new browser tab", (t) => {
+  const c = client(t, success, { perks: true, native: true });
+  const href = "mailto:vip@example.com?subject=VIP%20request&body=Hello%0D%0AVIP%20team";
+  c.context.perks = [{ title: "Contact us", actionUrl: href, buttonLabel: "Email the team" }];
+  c.context.posted = [];
+  c.run('window.webkit = { messageHandlers: { externalLink: { postMessage: (url) => posted.push(url) } } }; renderPerks(perks)');
+  const action = c.elements["[data-perks-list]"].children[0].children[2];
+  assert.equal(action.href, href);
+  assert.equal(action.target, undefined);
+  assert.equal(action.children[1].attributes["data-lucide"], "mail");
+  let prevented = false;
+  action.listeners.click({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.deepEqual([...c.context.posted], [href]);
+});
+
 test("lighter event actions preserve external links and unavailable-link states", (t) => {
   const c = client(t, success, { events: true });
   c.context.events = [

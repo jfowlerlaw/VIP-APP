@@ -1194,6 +1194,18 @@ async function handleAdminApi(req, res, url) {
     return;
   }
 
+  if (route === "POST /api/admin/perks/reorder") {
+    const body = await readJsonBody(req);
+    try {
+      const perks = await vipDb.reorderPerks(body.ids);
+      sendJson(res, 200, { perks: perks.map(publicPerk) });
+    } catch (error) {
+      if (![400, 409, 503].includes(error.status)) throw error;
+      sendJson(res, error.status, { message: error.message });
+    }
+    return;
+  }
+
   if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/perks/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/admin/perks/", ""));
     const body = await readJsonBody(req);

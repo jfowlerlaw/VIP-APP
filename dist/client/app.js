@@ -1389,16 +1389,18 @@ function renderPerks(perks) {
     const label = perk.buttonLabel || "View";
     const actionLabel = document.createElement("span");
     actionLabel.textContent = label;
-    if (perk.actionUrl) {
+    const actionUrl = normalizeExternalUrl(perk.actionUrl);
+    if (actionUrl) {
       const link = document.createElement("a");
       link.className = "perk-action";
-      link.href = perk.actionUrl;
-      link.target = "_blank";
+      link.href = actionUrl;
+      if (/^https?:/i.test(actionUrl)) link.target = "_blank";
       link.rel = "noopener";
       const arrow = document.createElement("i");
-      arrow.setAttribute("data-lucide", "arrow-up-right");
+      arrow.setAttribute("data-lucide", /^mailto:/i.test(actionUrl) ? "mail" : /^tel:/i.test(actionUrl) ? "phone" : "arrow-up-right");
       arrow.setAttribute("aria-hidden", "true");
       link.append(actionLabel, arrow);
+      link.addEventListener("click", (event) => openExternalUrl(event, actionUrl));
       article.append(icon, copy, link);
     } else {
       const button = document.createElement("button");
