@@ -37,7 +37,7 @@ function formElement(names) {
   return form;
 }
 
-function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false, profile = false, events = false } = {}) {
+function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight = 70, auth = false, profile = false, events = false, perks = false } = {}) {
   const elements = Object.fromEntries([".app-screen", "[data-app-loader]", "[data-launch-loading]", "[data-launch-error]",
     "[data-retry-launch]", "[data-launch-error-title]", "[data-launch-error-message]", "[data-auth-screen]", "[data-app-version]",
     "[data-unread-count]", "[data-inbox-summary]", "[data-mark-all-read]", "#view-title", "[data-refresh-inbox]",
@@ -46,6 +46,14 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
   if (events) {
     for (const key of ["[data-events-list]", "[data-next-event-title]", "[data-next-event-meta]"]) elements[key] = element();
     Object.defineProperty(elements["[data-events-list]"], "innerHTML", { set() { this.children = []; } });
+  }
+  if (perks) {
+    elements["[data-perks-list]"] = element();
+    elements[".toast"] = element();
+    Object.defineProperty(elements["[data-perks-list]"], "innerHTML", {
+      get() { return this.markup || ""; },
+      set(value) { this.markup = value; this.children = []; },
+    });
   }
   if (auth) {
     for (const key of ["[data-auth-title]", "[data-auth-description]", "[data-auth-toggle]", "[data-auth-switch]",
@@ -162,6 +170,45 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
 function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
+
+test("perks keep long titles separate from actions and omit unconfigured filler", (t) => {
+  const c = client(t, success, { perks: true });
+  c.context.perks = [{ title: "Get a FREE Vehicle Registration Holder", description: "  ", note: "", icon: "gift",
+    actionUrl: "https://example.com/registration-holder", buttonLabel: "Get Yours Here" }];
+  c.run("renderPerks(perks)");
+  const [card] = c.elements["[data-perks-list]"].children;
+  const [, copy, action] = card.children;
+  assert.equal(copy.className, "perk-copy");
+  assert.equal(copy.children.length, 1);
+  assert.equal(copy.children[0].textContent, "Get a FREE Vehicle Registration Holder");
+  assert.equal(action.className, "perk-action");
+  assert.equal(action.children[0].textContent, "Get Yours Here");
+  assert.equal(action.children[1].attributes["data-lucide"], "arrow-up-right");
+  assert.equal(action.children[1].attributes["aria-hidden"], "true");
+  assert.equal(action.href, "https://example.com/registration-holder");
+  assert.equal(action.target, "_blank");
+  assert.equal(action.rel, "noopener");
+});
+
+test("perks retain configured copy, notes, message actions and empty/error states", (t) => {
+  const c = client(t, success, { perks: true });
+  c.context.perks = [{ title: "Community access", description: "Your members-only community.", note: "Members-only access",
+    buttonLabel: "Details", actionMessage: "Contact the VIP desk to join." }];
+  c.run("renderPerks(perks)");
+  const list = c.elements["[data-perks-list]"];
+  const [, copy, button] = list.children[0].children;
+  assert.deepEqual(copy.children.map((item) => item.textContent), ["Community access", "Your members-only community.", "Members-only access"]);
+  assert.equal(button.className, "perk-action");
+  assert.equal(button.type, "button");
+  assert.equal(button.children[0].textContent, "Details");
+  button.listeners.click();
+  assert.equal(c.elements[".toast"].textContent, "Contact the VIP desk to join.");
+  c.run("renderPerks([])");
+  assert.equal(list.children.length, 1);
+  assert.match(list.children[0].innerHTML, /No perks published/);
+  c.run("renderPerksUnavailable()");
+  assert.match(list.innerHTML, /Perks temporarily unavailable/);
+});
 
 test("events expire from both the list and home card while the app stays open", (t) => {
   const c = client(t, success, { events: true });

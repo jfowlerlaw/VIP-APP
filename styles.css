@@ -923,24 +923,40 @@ p {
 
 .perk-card {
   display: grid;
-  grid-template-columns: 48px 1fr auto;
-  align-items: center;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   margin-bottom: 12px;
-  padding: 14px;
+  padding: 16px;
+}
+
+.perk-copy {
+  min-width: 0;
+}
+
+.perk-card h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .perk-card p {
-  margin-bottom: 0;
-  font-size: 0.82rem;
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .perk-card small {
   display: block;
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .perk-card.is-hidden {
@@ -956,11 +972,42 @@ p {
   background: var(--surface);
 }
 
+.perk-card .perk-action {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 12px;
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.perk-action span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.perk-action svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.perk-action:hover { border-color: var(--soft-ink); }
+.perk-action:focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
+
 .perk-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius);
   color: #ffffff;
   background: var(--red);
@@ -2093,15 +2140,6 @@ p {
 
   .quick-actions {
     grid-template-columns: 1fr;
-  }
-
-  .perk-card {
-    grid-template-columns: 44px 1fr;
-  }
-
-  .perk-card button,
-  .perk-card a {
-    grid-column: 1 / -1;
   }
 
   .event-card {

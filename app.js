@@ -1310,7 +1310,7 @@ function renderPerksUnavailable() {
         <i data-lucide="sparkles" aria-hidden="true"></i>
         <span class="fallback-icon" aria-hidden="true">V</span>
       </div>
-      <div>
+      <div class="perk-copy">
         <h2>Perks temporarily unavailable</h2>
         <p>VIP perks could not be loaded. Please check again in a few minutes.</p>
         <small>VIP access is still active</small>
@@ -1332,7 +1332,7 @@ function renderPerks(perks) {
         <i data-lucide="sparkles" aria-hidden="true"></i>
         <span class="fallback-icon" aria-hidden="true">V</span>
       </div>
-      <div>
+      <div class="perk-copy">
         <h2>No perks published</h2>
         <p>New VIP perks will appear here.</p>
         <small>Check back soon</small>
@@ -1359,26 +1359,42 @@ function renderPerks(perks) {
     icon.append(iconElement, fallbackIcon);
 
     const copy = document.createElement("div");
+    copy.className = "perk-copy";
     const title = document.createElement("h2");
     title.textContent = perk.title || "VIP Perk";
-    const description = document.createElement("p");
-    description.textContent = perk.description || "VIP member perk.";
-    const note = document.createElement("small");
-    note.textContent = perk.note || "Available now";
-    copy.append(title, description, note);
+    copy.append(title);
+    const descriptionText = String(perk.description || "").trim();
+    if (descriptionText) {
+      const description = document.createElement("p");
+      description.textContent = descriptionText;
+      copy.append(description);
+    }
+    const noteText = String(perk.note || "").trim();
+    if (noteText) {
+      const note = document.createElement("small");
+      note.textContent = noteText;
+      copy.append(note);
+    }
 
     const label = perk.buttonLabel || "View";
+    const actionLabel = document.createElement("span");
+    actionLabel.textContent = label;
     if (perk.actionUrl) {
       const link = document.createElement("a");
+      link.className = "perk-action";
       link.href = perk.actionUrl;
       link.target = "_blank";
       link.rel = "noopener";
-      link.textContent = label;
+      const arrow = document.createElement("i");
+      arrow.setAttribute("data-lucide", "arrow-up-right");
+      arrow.setAttribute("aria-hidden", "true");
+      link.append(actionLabel, arrow);
       article.append(icon, copy, link);
     } else {
       const button = document.createElement("button");
+      button.className = "perk-action";
       button.type = "button";
-      button.textContent = label;
+      button.append(actionLabel);
       button.addEventListener("click", () => {
         showToast(perk.actionMessage || `${perk.title || "VIP perk"} selected.`);
       });
