@@ -171,18 +171,29 @@ function success(path) {
   return new Response(JSON.stringify(path.endsWith("/me") ? { member } : { events: [], perks: [], notifications: [] }));
 }
 
-test("the simpler Perks header is scoped to its view and resets when leaving", (t) => {
+test("clean headers apply to content and settings views without changing Card or Help", (t) => {
   const c = client(t, success);
   c.run('activateView("perks", "VIP Perks")');
   assert.equal(c.elements[".app-screen"].dataset.activeView, "perks");
   assert.equal(c.elements["#view-title"].textContent, "Perks");
+  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), true);
   assert.equal(c.elements["#view-perks"].classList.contains("is-active"), true);
   assert.equal(c.elements['[data-view-target="perks"]'].attributes["aria-current"], "page");
-  c.run('activateView("profile", "Profile")');
-  assert.equal(c.elements[".app-screen"].dataset.activeView, "profile");
-  assert.equal(c.elements["#view-title"].textContent, "Profile");
+  for (const [target, title] of [["events", "Events"], ["notifications", "Inbox"], ["profile", "Profile"]]) {
+    c.context.target = target;
+    c.context.title = title;
+    c.run('activateView(target, title)');
+    assert.equal(c.elements[".app-screen"].dataset.activeView, target);
+    assert.equal(c.elements["#view-title"].textContent, title);
+    assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), true);
+  }
   assert.equal(c.elements["#view-perks"].classList.contains("is-active"), false);
   assert.equal(c.elements['[data-view-target="perks"]'].attributes["aria-current"], undefined);
+  c.run('activateView("card", "Card")');
+  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), false);
+  c.run('activateView("concierge", "Concierge")');
+  assert.equal(c.elements[".app-screen"].classList.contains("is-refined"), false);
+  assert.equal(c.elements["#view-title"].textContent, "Concierge");
 });
 
 test("perks keep long titles separate from actions and omit unconfigured filler", (t) => {
@@ -222,6 +233,26 @@ test("perks retain configured copy, notes, message actions and empty/error state
   assert.match(list.children[0].innerHTML, /No perks published/);
   c.run("renderPerksUnavailable()");
   assert.match(list.innerHTML, /Perks temporarily unavailable/);
+});
+
+test("lighter event actions preserve external links and unavailable-link states", (t) => {
+  const c = client(t, success, { events: true });
+  c.context.events = [
+    { id: "linked", title: "VIP night", eventUrl: "https://example.com/event" },
+    { id: "pending", title: "More details soon" },
+  ];
+  c.run("renderEvents(events)");
+  const cards = c.elements["[data-events-list]"].children;
+  const actions = cards.map((card) => card.children[0].children.at(-1).children[0]);
+  const link = actions.find((action) => action.href);
+  assert.equal(link.href, "https://example.com/event");
+  assert.equal(link.target, "_blank");
+  assert.equal(link.rel, "noopener");
+  assert.equal(link.children[0].textContent, "View event");
+  assert.equal(link.children[1].attributes["data-lucide"], "arrow-up-right");
+  assert.equal(link.children[1].attributes["aria-hidden"], "true");
+  const pending = actions.find((action) => action.disabled);
+  assert.equal(pending.textContent, "Event link coming soon");
 });
 
 test("events expire from both the list and home card while the app stays open", (t) => {

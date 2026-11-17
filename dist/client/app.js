@@ -661,7 +661,10 @@ function cardScreenTitle(member = activeMember) {
 }
 
 function activateView(target, title) {
-  if (appScreen) appScreen.dataset.activeView = target;
+  if (appScreen) {
+    appScreen.dataset.activeView = target;
+    appScreen.classList.toggle("is-refined", ["perks", "events", "notifications", "profile"].includes(target));
+  }
   views.forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${target}`);
     if (view.id === `view-${target}`) {
@@ -1256,7 +1259,12 @@ function renderEvents(events) {
       link.href = eventUrl;
       link.target = "_blank";
       link.rel = "noopener";
-      link.textContent = "View event";
+      const label = document.createElement("span");
+      label.textContent = "View event";
+      const arrow = document.createElement("i");
+      arrow.setAttribute("data-lucide", "arrow-up-right");
+      arrow.setAttribute("aria-hidden", "true");
+      link.append(label, arrow);
       link.addEventListener("click", (clickEvent) => openExternalUrl(clickEvent, eventUrl));
       actions.append(link);
     } else {
