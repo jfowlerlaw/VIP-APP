@@ -46,14 +46,6 @@
       <section class="phone-shell" aria-label="VIP member portal">
         <div class="phone-frame">
           <div class="app-screen">
-            <header class="app-header">
-              <img
-                class="brand-logo"
-                src="assets/just-call-moe-logo.png"
-                alt="Just Call Moe"
-              >
-            </header>
-
             <section class="app-loader" data-app-loader aria-live="polite" aria-label="Loading VIP portal">
               <div class="app-loader-card" data-launch-loading>
                 <div class="loader-logo-plate">
@@ -571,6 +563,15 @@
         <a class="brief-link" href="mailto:vip@justcallmoe.com?subject=VIP%20portal%20help">Contact VIP Support</a>
       </aside>
     </main>
+
+    <dialog class="directions-dialog" data-directions-dialog aria-labelledby="directions-heading" aria-describedby="directions-destination">
+      <div class="directions-content">
+        <h2 id="directions-heading">Get directions</h2>
+        <p id="directions-destination" data-directions-destination></p>
+        <div class="directions-options" data-directions-options></div>
+        <button class="secondary-action full-width" type="button" data-cancel-directions>Cancel</button>
+      </div>
+    </dialog>
 
     <dialog class="notification-delete-dialog" data-notification-delete-dialog aria-labelledby="notification-delete-heading">
       <div class="notification-delete-content">

@@ -159,13 +159,6 @@ img {
   background: var(--screen-bg);
 }
 
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 18px 18px 8px;
-}
-
 .app-loader {
   position: absolute;
   inset: 0;
@@ -557,12 +550,6 @@ img {
   display: none;
 }
 
-.brand-logo {
-  width: 154px;
-  height: auto;
-}
-
-[data-theme="dark"] .brand-logo,
 [data-theme="dark"] .build-logo {
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.92);
@@ -1141,7 +1128,8 @@ p {
   margin: 0;
 }
 
-.event-detail-actions a {
+.event-detail-actions a,
+.event-detail-actions button {
   min-width: 0;
   min-height: 44px;
   padding: 8px 0;
@@ -1226,7 +1214,8 @@ p {
   padding-right: 48px;
 }
 
-.notification-delete-dialog {
+.notification-delete-dialog,
+.directions-dialog {
   position: fixed;
   inset:
     calc(16px + var(--safe-top))
@@ -1249,12 +1238,14 @@ p {
   overflow-y: auto;
 }
 
-.notification-delete-dialog[open] {
+.notification-delete-dialog[open],
+.directions-dialog[open] {
   display: block;
 }
 
 /* Keep grid sizing inside the modal to avoid WebKit stretching its top-layer box. */
-.notification-delete-content {
+.notification-delete-content,
+.directions-content {
   display: grid;
   grid-auto-rows: max-content;
   align-content: start;
@@ -1262,17 +1253,20 @@ p {
   min-width: 0;
 }
 
-.notification-delete-dialog::backdrop {
+.notification-delete-dialog::backdrop,
+.directions-dialog::backdrop {
   background: var(--overlay-bg);
 }
 
-.notification-delete-dialog h2 {
+.notification-delete-dialog h2,
+.directions-dialog h2 {
   margin: 0;
   font-size: 1.2rem;
   line-height: 1.3;
 }
 
-.notification-delete-dialog p {
+.notification-delete-dialog p,
+.directions-dialog p {
   margin: 0;
   font-size: 0.84rem;
   overflow-wrap: anywhere;
@@ -1281,6 +1275,31 @@ p {
 .notification-delete-title {
   font-weight: 800;
 }
+
+.directions-dialog p { color: var(--soft-ink); }
+.directions-options { display: grid; min-width: 0; }
+.directions-options a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.directions-options a:hover { color: var(--red); }
+.directions-options a:focus-visible,
+.directions-dialog button:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+.directions-options span { min-width: 0; overflow-wrap: anywhere; }
+.directions-options svg { width: 20px; height: 20px; flex-shrink: 0; }
+.directions-options svg:last-child { margin-left: auto; width: 16px; height: 16px; color: var(--muted); }
+.directions-dialog button { min-height: 44px; }
 
 .notification-delete-actions {
   display: grid;
@@ -1981,14 +2000,6 @@ p {
   border-radius: 0;
 }
 
-.native-shell .app-header {
-  padding:
-    calc(10px + var(--native-top-space))
-    calc(14px + var(--safe-right))
-    8px
-    calc(14px + var(--safe-left));
-}
-
 .native-shell .screen-title {
   padding-top: calc(16px + var(--native-top-space));
   padding-right: calc(14px + var(--safe-right));
@@ -2274,10 +2285,6 @@ p {
     border-radius: 0;
   }
 
-  .app-header {
-    display: none;
-  }
-
   .view {
     padding-right: 14px;
     padding-left: 14px;
@@ -2321,23 +2328,12 @@ p {
   background: var(--paper);
 }
 
-.app-screen.is-refined .app-header {
-  display: flex;
+.app-screen.is-refined .screen-title {
   padding:
     calc(20px + var(--native-top-space))
     calc(20px + var(--safe-right))
     16px
     calc(20px + var(--safe-left));
-}
-
-.app-screen.is-refined .brand-logo {
-  width: 132px;
-  border-radius: 3px;
-  box-shadow: none;
-}
-
-.app-screen.is-refined .screen-title {
-  padding: 0 calc(20px + var(--safe-right)) 16px calc(20px + var(--safe-left));
 }
 
 .app-screen.is-refined .screen-title > .eyebrow {
@@ -2370,6 +2366,7 @@ p {
 
 .event-link:not(:disabled):hover,
 .event-detail-actions a:hover,
+.event-detail-actions button:hover,
 .inbox-message-body button:hover,
 .text-setting-action:not(:disabled):hover {
   text-decoration: underline;
@@ -2393,10 +2390,6 @@ p {
 }
 
 @media (max-width: 374px) {
-  .brand-logo {
-    width: 136px;
-  }
-
   .etched-name {
     font-size: 0.74rem;
   }

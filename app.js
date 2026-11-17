@@ -43,6 +43,9 @@ const codeMessage = document.querySelector("[data-code-message]");
 const authToggle = document.querySelector("[data-auth-toggle]");
 const memberLogoutButtons = document.querySelectorAll("[data-member-logout]");
 const eventsList = document.querySelector("[data-events-list]");
+const directionsDialog = document.querySelector("[data-directions-dialog]");
+const directionsDestination = document.querySelector("[data-directions-destination]");
+const directionsOptions = document.querySelector("[data-directions-options]");
 const perksList = document.querySelector("[data-perks-list]");
 const nextEventTitle = document.querySelector("[data-next-event-title]");
 const nextEventMeta = document.querySelector("[data-next-event-meta]");
@@ -661,6 +664,7 @@ function cardScreenTitle(member = activeMember) {
 }
 
 function activateView(target, title) {
+  if (directionsDialog?.open) directionsDialog.close();
   if (appScreen) {
     appScreen.dataset.activeView = target;
     appScreen.classList.toggle("is-refined", ["card", "perks", "events", "notifications", "concierge", "profile"].includes(target));
@@ -853,6 +857,7 @@ function resetMemberAuth() {
   inboxError = false;
   pendingNotificationDeletion = null;
   if (notificationDeleteDialog?.open) notificationDeleteDialog.close();
+  if (directionsDialog?.open) directionsDialog.close();
   inboxList?.removeAttribute("aria-busy");
   renderInbox();
 
@@ -1177,6 +1182,51 @@ function renderEventsUnavailable() {
   }
 }
 
+function showDirections(destination) {
+  if (!directionsDialog || !directionsOptions || !destination.trim()) return;
+  directionsDestination.textContent = destination;
+  directionsOptions.innerHTML = "";
+  const providers = [
+    { label: "Apple Maps", base: "https://maps.apple.com/", parameters: { daddr: destination } },
+    { label: "Google Maps", base: "https://www.google.com/maps/dir/", parameters: { api: "1", destination } },
+    { label: "Waze", base: "https://waze.com/ul", parameters: { q: destination, navigate: "yes" } },
+  ];
+  for (const provider of providers) {
+    const url = new URL(provider.base);
+    for (const [name, value] of Object.entries(provider.parameters)) url.searchParams.set(name, value);
+    url.search = url.searchParams.toString().replace(/\+/g, "%20");
+    const link = document.createElement("a");
+    link.href = url.href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    const icon = document.createElement("i");
+    icon.setAttribute("data-lucide", "map-pin");
+    icon.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.textContent = provider.label;
+    const arrow = document.createElement("i");
+    arrow.setAttribute("data-lucide", "arrow-up-right");
+    arrow.setAttribute("aria-hidden", "true");
+    link.append(icon, label, arrow);
+    link.addEventListener("click", (event) => {
+      directionsDialog.close();
+      openExternalUrl(event, url.href);
+    });
+    directionsOptions.append(link);
+  }
+  if (!directionsDialog.open) directionsDialog.showModal();
+  window.lucide?.createIcons();
+}
+
+document.querySelector("[data-cancel-directions]")?.addEventListener("click", () => directionsDialog?.close());
+directionsDialog?.addEventListener("click", (event) => {
+  if (event.target !== directionsDialog) return;
+  const bounds = directionsDialog.getBoundingClientRect();
+  if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+    directionsDialog.close();
+  }
+});
+
 function renderEvents(events) {
   if (!Array.isArray(events)) return;
   cachedEvents = events;
@@ -1297,12 +1347,16 @@ function renderEvents(events) {
     if (event.startsAt && event.endsAt && Date.parse(event.endsAt) > Date.parse(event.startsAt)) {
       addDetailLink("Add to Calendar", "calendar-plus", apiUrl(`/api/events/${encodeURIComponent(event.id)}/calendar.ics`));
     }
-    const destination = event.address || [...new Set([event.location, event.city].filter(Boolean))].join(", ");
+    const destination = String(event.address || "").trim() || [...new Set([event.location, event.city].filter(Boolean))].join(", ");
     if (destination) {
-      const directions = isNativeShell()
-        ? `https://maps.apple.com/?daddr=${encodeURIComponent(destination)}`
-        : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
-      addDetailLink("Directions", "map-pin", directions);
+      const directions = document.createElement("button");
+      directions.className = "secondary-action";
+      directions.type = "button";
+      directions.setAttribute("aria-haspopup", "dialog");
+      directions.innerHTML = '<i data-lucide="map-pin" aria-hidden="true"></i>';
+      directions.append(document.createTextNode("Directions"));
+      directions.addEventListener("click", () => showDirections(destination));
+      detailsActions.append(directions);
     }
     copy.append(eyebrow, title, description, meta, venue, detailsActions, actions);
     article.append(copy);

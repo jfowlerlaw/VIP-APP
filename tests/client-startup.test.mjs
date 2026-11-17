@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { load } from "cheerio";
 
 const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
 const member = { id: "member-a", name: "Avery Mitchell", email: "avery@example.com", joined: "2024" };
@@ -44,8 +45,14 @@ function client(t, fetch, { native = false, cardNameWidth = null, cardNameHeight
     "[data-notification-delete-dialog]", "[data-confirm-notification-delete]", "[data-cancel-notification-delete]",
     "[data-notification-delete-title]", "[data-notification-delete-error]", "[data-review-account]"].map((key) => [key, element()]));
   if (events) {
-    for (const key of ["[data-events-list]", "[data-next-event-title]", "[data-next-event-meta]"]) elements[key] = element();
+    for (const key of ["[data-events-list]", "[data-next-event-title]", "[data-next-event-meta]",
+      "[data-directions-dialog]", "[data-directions-destination]", "[data-directions-options]", "[data-cancel-directions]"]) elements[key] = element();
     Object.defineProperty(elements["[data-events-list]"], "innerHTML", { set() { this.children = []; } });
+    Object.defineProperty(elements["[data-directions-options]"], "innerHTML", { set() { this.children = []; } });
+    const dialog = elements["[data-directions-dialog]"];
+    dialog.showModal = () => { dialog.open = true; };
+    dialog.close = () => { dialog.open = false; };
+    dialog.getBoundingClientRect = () => ({ left: 20, right: 340, top: 100, bottom: 450 });
   }
   if (perks) {
     elements["[data-perks-list]"] = element();
@@ -199,6 +206,14 @@ test("clean headers cover every tab while preserving the card greeting and Help 
   assert.equal(c.elements['[data-view-target="concierge"]'].attributes["aria-current"], "page");
 });
 
+test("member pages omit the header logo while keeping the splash and VIP card artwork", async () => {
+  const page = load(await readFile(new URL("../index.html", import.meta.url), "utf8"));
+  assert.equal(page(".app-header, .brand-logo").length, 0);
+  assert.equal(page("[data-launch-loading] .loader-logo").length, 1);
+  assert.equal(page(".card-art").length || page('img[alt="Just Call Moe VIP Card"]').length, 1);
+  assert.equal(page("[data-directions-dialog]").attr("aria-labelledby"), "directions-heading");
+});
+
 test("perks keep long titles separate from actions and omit unconfigured filler", (t) => {
   const c = client(t, success, { perks: true });
   c.context.perks = [{ title: "Get a FREE Vehicle Registration Holder", description: "  ", note: "", icon: "gift",
@@ -272,6 +287,71 @@ test("lighter event actions preserve external links and unavailable-link states"
   assert.equal(link.children[1].attributes["aria-hidden"], "true");
   const pending = actions.find((action) => action.disabled);
   assert.equal(pending.textContent, "Event link coming soon");
+});
+
+test("event directions offer all map providers with correctly encoded destinations on web and iPhone", (t) => {
+  for (const native of [false, true]) {
+    const c = client(t, success, { events: true, native });
+    const destination = "101 Main St #2 & A+B, Orlando, FL";
+    c.context.events = [{ id: "maps", title: "VIP night", address: destination, location: "Moe's venue", city: "Orlando" }];
+    c.context.posted = [];
+    c.run('window.webkit = { messageHandlers: { externalLink: { postMessage: (url) => posted.push(url) } } }; renderEvents(events)');
+    const details = c.elements["[data-events-list]"].children[0].children[0].children.at(-2);
+    const button = details.children[0];
+    assert.equal(button.type, "button");
+    assert.equal(button.attributes["aria-haspopup"], "dialog");
+    assert.equal(button.children[0].textContent, "Directions");
+    for (const [index, host, parameter, label] of [[0, "maps.apple.com", "daddr", "Apple Maps"],
+      [1, "www.google.com", "destination", "Google Maps"], [2, "waze.com", "q", "Waze"]]) {
+      button.listeners.click();
+      assert.equal(c.elements["[data-directions-dialog]"].open, true);
+      assert.equal(c.elements["[data-directions-destination]"].textContent, destination);
+      const options = c.elements["[data-directions-options]"].children;
+      assert.equal(options.length, 3);
+      const link = options[index];
+      const url = new URL(link.href);
+      assert.equal(url.hostname, host);
+      assert.equal(url.protocol, "https:");
+      assert.equal(url.searchParams.get(parameter), destination);
+      assert.equal(link.children[1].textContent, label);
+      assert.equal(link.target, "_blank");
+      assert.equal(link.rel, "noopener");
+      if (index === 1) assert.equal(url.searchParams.get("api"), "1");
+      if (index === 2) assert.equal(url.searchParams.get("navigate"), "yes");
+      let prevented = false;
+      link.listeners.click({ preventDefault() { prevented = true; } });
+      assert.equal(prevented, native);
+      assert.equal(c.elements["[data-directions-dialog]"].open, false);
+      if (native) assert.equal(c.context.posted.at(-1), url.href);
+    }
+    assert.equal(c.context.posted.length, native ? 3 : 0);
+  }
+});
+
+test("directions fall back to venue and city, refresh destinations, and support cancellation", (t) => {
+  const c = client(t, success, { events: true });
+  c.run('renderEvents([{location: "Moe Hall", city: "Orlando", address: "  "}, {title: "TBD"}])');
+  const cards = c.elements["[data-events-list]"].children;
+  cards[0].children[0].children.at(-2).children[0].listeners.click();
+  const dialog = c.elements["[data-directions-dialog]"];
+  assert.equal(dialog.open, true);
+  assert.equal(c.elements["[data-directions-destination]"].textContent, "Moe Hall, Orlando");
+  assert.equal(cards[1].children[0].children.at(-2).children.length, 0);
+  c.elements["[data-cancel-directions]"].listeners.click();
+  assert.equal(dialog.open, false);
+  c.run('showDirections("New venue, Tampa")');
+  assert.equal(c.elements["[data-directions-options]"].children.length, 3);
+  assert.equal(new URL(c.elements["[data-directions-options]"].children[0].href).searchParams.get("daddr"), "New venue, Tampa");
+  dialog.listeners.click({ target: dialog, clientX: 25, clientY: 120 });
+  assert.equal(dialog.open, true);
+  dialog.listeners.click({ target: dialog, clientX: 5, clientY: 120 });
+  assert.equal(dialog.open, false);
+  c.run('showDirections("New venue"); activateView("profile", "Profile")');
+  assert.equal(dialog.open, false);
+  c.run('showDirections("New venue"); resetMemberAuth()');
+  assert.equal(dialog.open, false);
+  c.run('showDirections("  ")');
+  assert.equal(dialog.open, false);
 });
 
 test("events expire from both the list and home card while the app stays open", (t) => {
