@@ -974,12 +974,14 @@ p {
 
 .perk-card .perk-action {
   grid-column: 1 / -1;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
+  justify-self: start;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
   min-height: 44px;
-  padding: 11px 12px;
+  padding: 11px 14px;
   border-color: var(--line);
   border-radius: 6px;
   background: var(--field);
